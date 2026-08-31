@@ -1,0 +1,4010 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light only">
+    <meta name="theme-color" content="#fdfbf5">
+    <title>조명 스케줄러 (위치기반 일출·일몰 및 보상 시각 표기)</title>
+    <style>
+        html {
+            color-scheme: light only; /* 크롬 자동 다크 테마가 색상을 반전/보정하지 않도록 명시 */
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+        }
+        body {
+            background-color: #f5f0e6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        /* 모바일 프레임 컨테이너 */
+        .mobile-container {
+            width: 100%;
+            max-width: 400px;
+            height: 900px;
+            background-color: #fdfbf5;
+            border-radius: 24px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 2px solid #e8ddc8;
+            position: relative;
+        }
+        
+        /* 상단바 */
+        header {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 16px 20px 14px;
+            border-bottom: 1px solid #e8ddc8;
+            background-color: #fdfbf5;
+        }
+        .header-top-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header-title {
+            font-size: 11.5px;
+            font-weight: 700;
+            color: #a89c88;
+            letter-spacing: 0.3px;
+        }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .header-clock-block {
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+        }
+        .header-clock {
+            font-size: 30px;
+            font-weight: 800;
+            color: #2d2a24;
+            line-height: 1;
+            letter-spacing: 0.3px;
+            font-variant-numeric: tabular-nums;
+        }
+        .header-date {
+            font-size: 12px;
+            color: #a89c88;
+            font-weight: 600;
+        }
+        .header-chips-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+        }
+        .info-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 10.5px;
+            font-weight: 600;
+            color: #8a8074;
+            background: #f0e8d5;
+            border-radius: 20px;
+            padding: 4px 10px;
+            white-space: nowrap;
+        }
+        .info-chip.sun-chip {
+            color: #b45309;
+            background: #fffbeb;
+            display: none;
+        }
+        .info-chip.sun-chip.show {
+            display: inline-flex;
+        }
+        .info-chip.unsaved-chip {
+            color: #b91c1c;
+            background: #fef2f2;
+            cursor: pointer;
+        }
+        .bt-status {
+            font-size: 11px;
+            padding: 5px 11px;
+            border-radius: 20px;
+            background-color: #f4eee0;
+            color: #8a8074;
+            font-weight: 700;
+            border: 1px solid #e8ddc8;
+            cursor: pointer;
+        }
+        .bt-status.connected {
+            background-color: #ecfdf5;
+            color: #059669;
+            border-color: #a7f3d0;
+        }
+        .bt-status.connecting {
+            background-color: #fffbeb;
+            color: #b45309;
+            border-color: #fde68a;
+        }
+
+        /* 헤더 아이콘 버튼 (블루투스 상태 / 설정) */
+        .icon-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.15s;
+            flex-shrink: 0;
+        }
+        .icon-btn:active {
+            transform: scale(0.94);
+        }
+        .ble-icon-btn {
+            background-color: #e8ddc8;
+            color: #8a8074;
+        }
+        .ble-icon-btn svg {
+            width: 17px;
+            height: 17px;
+        }
+        .ble-icon-btn.connecting {
+            background-color: #f3e8d2;
+            color: #a3814f;
+        }
+        .ble-icon-btn.connected {
+            background-color: #0082FC;
+            color: #ffffff;
+        }
+        .settings-icon-btn {
+            width: 40px;
+            height: 40px;
+            background-color: #362f27;
+            color: #f3e8d2;
+            font-size: 19px;
+            box-shadow: 0 3px 8px rgba(54, 47, 39, 0.35);
+        }
+        .settings-icon-btn svg {
+            width: 19px;
+            height: 19px;
+        }
+
+        /* 스케줄 전송 버튼 (화면 하단 고정) */
+        .btn-send {
+            display: block;
+            width: 100%;
+            background-color: #8fa384;
+            color: white;
+            border: none;
+            padding: 13px;
+            border-radius: 12px;
+            font-size: 14px;
+            cursor: pointer;
+            font-weight: 700;
+            box-shadow: 0 3px 6px rgba(143, 163, 132, 0.3);
+            text-align: center;
+        }
+        .btn-send:disabled {
+            background-color: #e8ddc8;
+            color: #a89c88;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        /* RTC 표시 바 */
+        .rtc-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 15px;
+            background-color: #f4eee0;
+            border-bottom: 1px solid #e8ddc8;
+            font-size: 11px;
+            color: #6b6357;
+        }
+        .rtc-bar .rtc-label {
+            font-weight: 600;
+        }
+        .rtc-bar .rtc-value {
+            font-weight: bold;
+            color: #2d2a24;
+            margin-left: 6px;
+        }
+        .btn-sync {
+            background-color: #c9a876;
+            border: none;
+            color: #4a3a1e;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .btn-sync:disabled {
+            background-color: #ede4d0;
+            color: #b0a693;
+            border-color: transparent;
+            cursor: not-allowed;
+        }
+
+        /* 조명 수동 제어 바 */
+        .manual-control-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 15px;
+            background-color: #f2ebd9;
+            border-bottom: 1px solid #e8ddc8;
+            font-size: 11px;
+            color: #6b6357;
+        }
+        .manual-control-label {
+            font-weight: 600;
+        }
+        .btn-manual-toggle {
+            border: none;
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .btn-manual-toggle.state-off {
+            background-color: #8fa384;
+            color: #fff;
+        }
+        .btn-manual-toggle.state-on {
+            background-color: #4a4238;
+            color: #fff;
+        }
+        .btn-manual-toggle:disabled {
+            background-color: #e8ddc8;
+            color: #a89c88;
+            cursor: not-allowed;
+        }
+        .manual-control-hint {
+            display: none;
+            padding: 6px 15px;
+            background-color: #f3e8d2;
+            border-bottom: 1px solid #e8ddc8;
+            font-size: 10.5px;
+            color: #a3814f;
+            text-align: center;
+        }
+        .manual-control-hint.show {
+            display: block;
+        }
+
+        /* 알림 토스트 */
+        .toast {
+            position: absolute;
+            left: 50%;
+            bottom: 90px;
+            transform: translateX(-50%);
+            background: rgba(54, 47, 39, 0.92);
+            color: #fff;
+            padding: 10px 16px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 600;
+            z-index: 200;
+            display: none;
+            max-width: 85%;
+            text-align: center;
+        }
+        .toast.error { background: rgba(179, 69, 47, 0.94); }
+        .toast.success { background: rgba(95, 122, 82, 0.94); }
+
+        /* 전체 스크롤 영역 */
+        .scroll-content {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* 스케줄 카드 영역 */
+        .schedule-card {
+            background: #fffdf7;
+            border: 1.5px solid #ddd0b5;
+            border-radius: 16px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+            position: relative;
+        }
+
+        .schedule-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .schedule-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .schedule-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+            background-color: #2d2a24;
+            display: inline-block;
+        }
+
+        .schedule-title {
+            font-size: 15px;
+            font-weight: bold;
+            color: #2d2a24;
+        }
+
+        .schedule-delete-btn {
+            background: none;
+            border: none;
+            color: #b3452f;
+            font-size: 12px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        /* 요일 선택 버튼 영역 */
+        .days-row {
+            display: flex;
+            gap: 4px;
+            justify-content: space-between;
+        }
+        .day-btn {
+            flex: 1;
+            padding: 8px 0;
+            background: #f0e8d5;
+            border: 1px solid #ddd0b5;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: bold;
+            color: #8a8074;
+            cursor: pointer;
+            text-align: center;
+        }
+        .day-btn.selected {
+            background-color: #2d2a24;
+            color: white;
+            border-color: #2d2a24;
+        }
+
+        /* 스텝 리스트 스크롤 영역 */
+        .steps-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 420px;
+            overflow-y: auto;
+            padding-right: 2px;
+        }
+
+        /* 개별 스텝 박스 */
+        .step-row {
+            background: #f4eee0;
+            border: 1px solid #e8ddc8;
+            border-radius: 12px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .step-header {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .step-header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .step-label {
+            font-size: 13px;
+            font-weight: bold;
+            color: #4a4238;
+            flex-shrink: 0;
+        }
+
+
+        .step-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+
+        .step-delete {
+            background: none;
+            border: none;
+            color: #b3452f;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .time-setting-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        /* ON/OFF 한 줄(행) 레이아웃 */
+        .time-block {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .row-badge {
+            width: 30px;
+            flex-shrink: 0;
+            font-size: 12px;
+            font-weight: bold;
+            color: #2d2a24;
+        }
+
+        .mode-select {
+            flex-shrink: 0;
+            width: 92px;
+            font-size: 11px;
+            padding: 8px 4px;
+            border-radius: 8px;
+            border: 1px solid #ddd0b5;
+            background: #fdfbf5;
+            color: #4a4238;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        /* 시간 직접입력 터치 박스 */
+        .time-inputs-wrap {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 40px;
+            background: #fdfbf5;
+            border: 1px solid #ddd0b5;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s;
+        }
+        .time-inputs-wrap:hover {
+            background: #f2ead9;
+            border-color: #c9a876;
+        }
+
+        .time-display-text {
+            font-size: 15px;
+            font-weight: bold;
+            color: #362f27;
+            letter-spacing: 1px;
+        }
+
+        /* 일출/일몰 오프셋 보상 터치 박스 */
+        .solar-offset-wrap {
+            flex: 1;
+            display: none;
+            flex-direction: column;
+            gap: 2px;
+            align-items: center;
+            justify-content: center;
+            min-height: 40px;
+            background: #c9a876;
+            border: 1px solid #bb9865;
+            border-radius: 8px;
+            padding: 5px 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .solar-offset-wrap:hover {
+            background: #d4b483;
+        }
+
+        .solar-base-info {
+            font-size: 10px;
+            color: #5c4a2e;
+            font-weight: 600;
+        }
+
+        .solar-final-info {
+            font-size: 13px;
+            font-weight: bold;
+            color: #3d2f1a;
+        }
+
+        /* 스텝 추가 버튼 */
+        .add-step-btn {
+            background-color: #f0e8d5;
+            color: #8a8074;
+            border: none;
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+        }
+        .add-step-btn:hover { background-color: #e8ddc8; }
+
+        /* 스케줄 박스 추가 영역 */
+        .add-schedule-container {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .add-schedule-btn {
+            background-color: #8fa384;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 12px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(143, 163, 132, 0.25);
+        }
+        .add-schedule-btn:disabled {
+            background-color: #e8ddc8;
+            color: #a89c88;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+
+        .limit-info {
+            text-align: center;
+            color: #8a8074;
+            font-size: 11px;
+        }
+        .limit-info.warn {
+            color: #b3452f;
+            font-weight: bold;
+        }
+
+        /* 요일 미선택 / 시간 겹침 경고 */
+        .warning-text {
+            font-size: 11px;
+            color: #b3452f;
+            font-weight: 600;
+            display: none;
+            padding: 4px 2px 0;
+        }
+        .warning-text.show {
+            display: block;
+        }
+
+        /* --- 공통 팝업 모달 스타일 --- */
+        .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            backdrop-filter: blur(2px);
+        }
+
+        .modal-box {
+            background: #fdfbf5;
+            width: 85%;
+            max-width: 320px;
+            border-radius: 20px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #2d2a24;
+            text-align: center;
+        }
+
+        .modal-picker-row {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .picker-column {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .picker-btn {
+            background: #f0e8d5;
+            border: none;
+            width: 48px;
+            height: 36px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #6b6357;
+            cursor: pointer;
+        }
+
+        .picker-input {
+            width: 64px;
+            height: 56px;
+            text-align: center;
+            font-size: 26px;
+            font-weight: bold;
+            border: 2px solid #ddd0b5;
+            border-radius: 10px;
+            background: #fdfbf5;
+            color: #2d2a24;
+        }
+
+        .modal-colon {
+            font-size: 28px;
+            font-weight: bold;
+            color: #8a8074;
+            margin-top: 5px;
+        }
+
+        .offset-toggle-row {
+            display: flex;
+            gap: 10px;
+        }
+        .offset-type-btn {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd0b5;
+            border-radius: 10px;
+            background: #f4eee0;
+            font-size: 14px;
+            font-weight: bold;
+            color: #8a8074;
+            cursor: pointer;
+            text-align: center;
+        }
+        .offset-type-btn.selected {
+            background: #ecdcb8;
+            border-color: #c9a876;
+            color: #5c4a2e;
+        }
+
+        .modal-btn-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+        }
+        .modal-btn.cancel { background: #f0e8d5; color: #8a8074; }
+        .modal-btn.confirm { background: #8fa384; color: white; }
+        .modal-btn.confirm.blue { background: #8fa384; }
+
+        /* STEP 상세 설정 모달 (점멸 사용여부 + ON/OFF 유지 시간) */
+        .modal-title-icon {
+            margin-right: 4px;
+        }
+        .settings-card {
+            border: 1px solid #e8ddc8;
+            border-radius: 12px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            transition: opacity 0.2s;
+        }
+        .settings-card.disabled {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+        .settings-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .settings-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #4a4238;
+        }
+        .checkbox-row input[type="checkbox"] {
+            width: 22px;
+            height: 22px;
+            accent-color: #8fa384;
+            cursor: pointer;
+        }
+        .stepper {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .stepper-btn {
+            width: 26px;
+            height: 26px;
+            border-radius: 6px;
+            border: 1px solid #ddd0b5;
+            background: #f0e8d5;
+            color: #6b6357;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+        .stepper-btn:hover { background: #e8ddc8; }
+        .stepper-input {
+            width: 46px;
+            height: 30px;
+            text-align: center;
+            border: 1px solid #ddd0b5;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: bold;
+            color: #2d2a24;
+            background: #fdfbf5;
+        }
+        .settings-hint-center {
+            font-size: 11px;
+            color: #a89c88;
+            text-align: center;
+        }
+
+        /* 설정 메뉴 모달 */
+        .settings-modal-box {
+            max-width: 340px;
+            padding: 20px 16px;
+        }
+        .settings-menu-list {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .settings-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            background: none;
+            border: none;
+            padding: 13px 6px;
+            border-bottom: 1px solid #f0e8d5;
+            cursor: pointer;
+            text-align: left;
+        }
+        .settings-menu-item:last-child {
+            border-bottom: none;
+        }
+        .settings-menu-item:active {
+            background-color: #f4eee0;
+        }
+        .settings-menu-item:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .settings-menu-item:disabled:active {
+            background-color: transparent;
+        }
+        .settings-menu-badge {
+            font-size: 9.5px;
+            font-weight: 700;
+            color: #a3814f;
+            background: #f3e8d2;
+            border-radius: 20px;
+            padding: 3px 8px;
+            margin-right: 4px;
+            white-space: nowrap;
+        }
+        .settings-menu-icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 9px;
+            background: #f0e8d5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            flex-shrink: 0;
+        }
+        .settings-menu-label {
+            flex: 1;
+            font-size: 14px;
+            font-weight: 600;
+            color: #362f27;
+        }
+        .settings-menu-arrow {
+            color: #c4b79c;
+            font-size: 16px;
+        }
+
+        /* 설정 하위 화면 공통 (목록형 모달) */
+        .sub-modal-box {
+            max-width: 340px;
+            padding: 20px 16px;
+            max-height: 82vh;
+            overflow-y: auto;
+        }
+        .list-empty {
+            font-size: 12px;
+            color: #a89c88;
+            text-align: center;
+            padding: 18px 0;
+        }
+        .list-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 10px 4px;
+            border-bottom: 1px solid #f0e8d5;
+        }
+        .list-row:last-child { border-bottom: none; }
+        .list-row-text {
+            font-size: 13px;
+            color: #362f27;
+            font-weight: 600;
+        }
+        .list-row-sub {
+            font-size: 11px;
+            color: #a89c88;
+            margin-top: 2px;
+        }
+        .list-row-delete {
+            background: none;
+            border: none;
+            color: #b3452f;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .add-form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px dashed #e8ddc8;
+        }
+        .add-form-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .add-form-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #6b6357;
+            width: 78px;
+            flex-shrink: 0;
+        }
+        .date-input, .pw-input {
+            flex: 1;
+            border: 1px solid #ddd0b5;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 13px;
+            color: #362f27;
+            background: #fdfbf5;
+            min-width: 0;
+        }
+        .yearly-check-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #6b6357;
+            font-weight: 600;
+        }
+        .yearly-check-row input { width: 16px; height: 16px; accent-color: #8fa384; }
+        .btn-add-entry {
+            background: #8fa384;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .btn-add-entry:disabled {
+            background: #e8ddc8;
+            color: #a89c88;
+            cursor: not-allowed;
+        }
+        .limit-note {
+            font-size: 10.5px;
+            color: #a89c88;
+            text-align: center;
+            margin-top: 4px;
+        }
+        .device-info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 11px 4px;
+            border-bottom: 1px solid #f0e8d5;
+            font-size: 13px;
+        }
+        .device-info-row:last-child { border-bottom: none; }
+        .device-info-label { color: #6b6357; font-weight: 600; }
+        .device-info-value { color: #362f27; font-weight: 700; }
+
+        /* 비밀번호 PIN 입력 */
+        .pw-dots-row {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin: 8px 0 4px;
+        }
+        .pw-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 1.5px solid #ddd0b5;
+            background: #fdfbf5;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .pw-dot.filled {
+            background: #362f27;
+            border-color: #362f27;
+        }
+        .pw-error-text {
+            font-size: 11px;
+            color: #b3452f;
+            text-align: center;
+            min-height: 14px;
+            font-weight: 600;
+        }
+        .pw-keypad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .pw-key {
+            padding: 15px 0;
+            border-radius: 10px;
+            border: 1px solid #ddd0b5;
+            background: #fdfbf5;
+            font-size: 18px;
+            font-weight: 700;
+            color: #362f27;
+            cursor: pointer;
+        }
+        .pw-key:active { background: #f0e8d5; }
+        .pw-key.pw-key-fn {
+            font-size: 12px;
+            color: #6b6357;
+        }
+
+        /* 접속 승인용 비밀번호 입력창(passwordPromptModalOverlay) 전용 - 화면 위쪽에 붙이고
+           스크롤 없이 한 화면에 다 들어오도록 전체적으로 축소 */
+        #passwordPromptModalOverlay {
+            align-items: flex-start;
+            padding-top: 28px;
+        }
+        #passwordPromptModalOverlay .modal-box {
+            padding: 16px 18px;
+            gap: 10px;
+            max-width: 260px;
+        }
+        #passwordPromptModalOverlay .modal-title {
+            font-size: 14px;
+        }
+        #passwordPromptModalOverlay .setting-desc {
+            font-size: 11.5px;
+            line-height: 1.4;
+        }
+        #passwordPromptModalOverlay .pw-dots-row {
+            margin: 4px 0 2px;
+            gap: 10px;
+        }
+        #passwordPromptModalOverlay .pw-dot {
+            width: 11px;
+            height: 11px;
+        }
+        #passwordPromptModalOverlay .pw-keypad {
+            gap: 6px;
+            margin-top: 4px;
+        }
+        #passwordPromptModalOverlay .pw-key {
+            padding: 9px 0;
+            font-size: 15px;
+            border-radius: 8px;
+        }
+        #passwordPromptModalOverlay .modal-btn-group {
+            margin-top: 6px !important;
+        }
+        /* ====================================================================
+           LED 연출 설정 콘솔 (fx- 접두사로 앱 전체 스타일과 완전히 분리)
+           앱 본체는 크림톤이지만, 이 화면만 의도적으로 무대/DJ 조명 콘솔 느낌의
+           어두운 패널 + 황동 페이더로 디자인했습니다.
+           ==================================================================== */
+        .fx-console {
+            width: 100%;
+            flex: 1;
+            min-height: 0;
+            background:
+              radial-gradient(120% 60% at 50% -10%, #232a34 0%, #171b21 45%, #0f1216 100%);
+            color: #e9e4d8;
+            font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            scrollbar-width: none;       /* Firefox: 스크롤은 유지하되 막대만 숨김 */
+            -ms-overflow-style: none;    /* 구형 Edge/IE */
+        }
+        .fx-console::-webkit-scrollbar { display: none; } /* Chrome/Safari */
+        .fx-header {
+            padding: 20px 20px 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .fx-hdr-left { display: flex; align-items: center; gap: 8px; }
+        .fx-hdr-icon { font-size: 16px; line-height: 1; }
+        .fx-hdr-title { font-size: 18px; font-weight: 700; letter-spacing: 0.2px; color: #e9e4d8; }
+        .fx-close-btn {
+            width: 32px; height: 32px; border-radius: 50%;
+            background: #1c2129; border: 1px solid #2b323d; color: #9aa1ad;
+            font-size: 14px; cursor: pointer;
+        }
+        .fx-mode-rail {
+            display: grid; grid-template-columns: repeat(5, 1fr);
+            gap: 8px; padding: 8px 16px 18px;
+        }
+        .fx-mode-sw {
+            background: linear-gradient(180deg, #2b3240, #1f2530);
+            border: 1px solid #444d5c;
+            border-radius: 13px;
+            padding: 14px 4px 12px; display: flex; flex-direction: column;
+            align-items: center; gap: 8px; cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+        .fx-mode-sw:active { transform: scale(0.96); }
+        .fx-sw-led { width: 6px; height: 6px; border-radius: 50%; background: #3a3f48; }
+        .fx-sw-icon { width: 25px; height: 25px; color: #9aa1ad; }
+        .fx-sw-label { font-size: 9.8px; font-weight: 600; color: #9aa1ad; white-space: nowrap; }
+        .fx-mode-sw.active { background: linear-gradient(180deg, #333b48, #232a35); border-color: #5a6474; box-shadow: 0 2px 6px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08); }
+        .fx-mode-sw.active .fx-sw-led { background: #ffb454; box-shadow: 0 0 7px #ffb454; }
+        .fx-mode-sw.active .fx-sw-icon { color: #ffb454; }
+        .fx-mode-sw.active .fx-sw-label { color: #e9e4d8; }
+
+        .fx-preview-zone {
+            flex-shrink: 0;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 16px; padding: 10px 20px 6px;
+        }
+        .fx-bulb-wrap { position: relative; width: 180px; height: 180px; display: flex; align-items: center; justify-content: center; }
+        .fx-bulb-ambient {
+            position: absolute; inset: -40px; border-radius: 50%;
+            background: radial-gradient(circle, var(--fx-glow-color, #ffb454) 0%, transparent 68%);
+            opacity: var(--fx-glow-op, 0); filter: blur(6px);
+        }
+        .fx-bulb {
+            width: 118px; height: 118px; border-radius: 50%; position: relative;
+            background: radial-gradient(circle at 38% 32%,
+                color-mix(in srgb, var(--fx-glow-color, #ffb454) 96%, white 4%) 0%,
+                var(--fx-glow-color, #ffb454) 38%, #7a5326 78%, #2a2015 100%);
+            opacity: calc(0.22 + var(--fx-glow-op, 0) * 0.78);
+            box-shadow:
+                0 0 calc(16px + var(--fx-glow-op, 0) * 48px) calc(2px + var(--fx-glow-op, 0) * 20px) var(--fx-glow-color, #ffb454),
+                inset 0 -8px 18px rgba(0,0,0,0.35), inset 0 6px 14px rgba(255,255,255,0.18);
+        }
+        .fx-bulb::after {
+            content: ''; position: absolute; left: 50%; bottom: -15px; transform: translateX(-50%);
+            width: 40px; height: 20px; background: linear-gradient(180deg,#3a3f48,#20242b); border-radius: 3px;
+        }
+        .fx-bulb-base-ridges {
+            position: absolute; left: 50%; bottom: -15px; transform: translateX(-50%);
+            width: 40px; height: 20px;
+            background-image: repeating-linear-gradient(180deg, rgba(0,0,0,0.35) 0px, rgba(0,0,0,0.35) 2px, transparent 2px, transparent 5px);
+            border-radius: 3px;
+        }
+        .fx-readout { text-align: center; padding-top: 4px; }
+        .fx-readout-value {
+            font-size: 30px; font-weight: 700; color: #ffcf8a;
+            text-shadow: 0 0 18px rgba(255,180,84,0.35);
+            font-variant-numeric: tabular-nums;
+        }
+        .fx-readout-sub { font-size: 11px; color: #7d8390; font-weight: 500; margin-top: 3px; }
+
+        .fx-mode-desc { font-size: 11.5px; color: #7d8390; text-align: center; line-height: 1.5; padding: 0 20px; min-height: 30px; }
+
+        .fx-fader-zone { padding: 6px 20px 10px; display: flex; flex-direction: column; gap: 16px; }
+        .fx-fader-group { display: flex; flex-direction: column; gap: 8px; }
+        .fx-fader-label-row { display: flex; justify-content: space-between; align-items: baseline; }
+        .fx-fader-label { font-size: 11px; font-weight: 600; color: #7d8390; text-transform: uppercase; letter-spacing: 1px; }
+        .fx-fader-value { font-size: 12.5px; font-weight: 600; color: #ffb454; }
+        .fx-drag-row {
+            display: flex; align-items: center; gap: 8px;
+        }
+        .fx-step-btn {
+            flex-shrink: 0; width: 36px; height: 36px; padding: 0;
+            border-radius: 50%;
+            background: linear-gradient(180deg, #e8c98f, #c9a876 55%, #a3835a);
+            border: none;
+            box-shadow:
+                0 3px 7px rgba(0,0,0,0.45),
+                inset 0 1px 0 rgba(255,255,255,0.55),
+                inset 0 -2px 3px rgba(0,0,0,0.25);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; user-select: none;
+        }
+        .fx-step-btn svg { width: 15px; height: 15px; stroke: #4a3520; stroke-width: 2.4; fill: none; }
+        .fx-step-btn:active {
+            transform: scale(0.92);
+            box-shadow:
+                0 1px 3px rgba(0,0,0,0.4),
+                inset 0 1px 4px rgba(0,0,0,0.3);
+        }
+        .fx-drag-track {
+            position: relative; height: 36px; flex: 1; min-width: 0;
+            background: linear-gradient(180deg, #14171c, #191d24); border: 1px solid #2b323d; border-radius: 10px;
+            display: flex; align-items: center; padding: 0 4px; touch-action: none; cursor: grab; overflow: hidden;
+        }
+        .fx-drag-track:active { cursor: grabbing; }
+        .fx-drag-fill {
+            position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
+            background: linear-gradient(90deg, rgba(255,180,84,0.05), rgba(255,180,84,0.22)); border-radius: 9px;
+        }
+        .fx-drag-thumb {
+            position: relative; width: 28px; height: 28px; border-radius: 8px;
+            background: linear-gradient(180deg, #e8c98f, #c9a876 55%, #a3835a);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -2px 3px rgba(0,0,0,0.3);
+            display: flex; align-items: center; justify-content: center; pointer-events: none;
+        }
+        .fx-drag-thumb::before {
+            content: ''; width: 11px; height: 2px; background: rgba(80,58,20,0.6);
+            box-shadow: 0 4px 0 rgba(80,58,20,0.6), 0 -4px 0 rgba(80,58,20,0.6); border-radius: 1px;
+        }
+
+        .fx-footer { padding: 10px 20px 22px; margin-top: auto; }
+        .fx-conn-hint { font-size: 11px; color: #e8674f; text-align: center; margin-bottom: 8px; }
+        .fx-btn-save {
+            width: 100%; padding: 14px; border: none; border-radius: 13px;
+            background: linear-gradient(180deg, #ffc978, #ffb454 60%, #d4922f);
+            color: #2a1c05; font-size: 14.5px; font-weight: 700; cursor: pointer;
+            box-shadow: 0 6px 16px rgba(255,180,84,0.28), inset 0 1px 0 rgba(255,255,255,0.4);
+        }
+        .fx-btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* ---- 주간 스케줄 설정 모달 (고급형 전용, 전체화면) ---- */
+        .schedule-modal-inner {
+            width: 100%;
+            height: 100%;
+            background: #fdfbf5;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .schedule-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 16px 14px;
+            border-bottom: 1px solid #e8ddc8;
+            flex-shrink: 0;
+        }
+        .schedule-modal-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #2d2a24;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="mobile-container">
+        <header>
+            <div class="header-top-row">
+                <span class="header-title">조명 연출 제어기</span>
+                <div class="header-right">
+                    <button class="icon-btn ble-icon-btn" id="btStatus" onclick="onBtStatusClick()" title="블루투스 미연결">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5l11 11L12 22V2l5.5 5.5L6.5 17.5"/></svg>
+                    </button>
+                    <button class="icon-btn settings-icon-btn" id="btnSettings" onclick="openSettingsModal()" title="설정">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="header-clock-block">
+                <span class="header-clock" id="headerClock">--:--:--</span>
+                <span class="header-date" id="headerDate">-</span>
+            </div>
+            <div class="header-chips-row">
+                <span class="info-chip" id="locationLabel">📍 위치 확인 중...</span>
+                <span class="info-chip sun-chip" id="headerSunInfo"></span>
+                <span class="info-chip unsaved-chip" id="unsavedDot" style="display:none;" onclick="openScheduleModal(); setTimeout(()=>document.getElementById('btnSend').scrollIntoView({behavior:'smooth', block:'center'}), 60);" title="탭하면 스케줄 설정으로 이동">🔴 미저장 변경사항</span>
+            </div>
+        </header>
+
+        <div class="rtc-bar">
+            <span><span class="rtc-label">📟 제어기 시각</span><span class="rtc-value" id="rtcValueLabel">-</span></span>
+            <button class="btn-sync" id="btnSync" onclick="syncControllerRtc()" disabled>동기화</button>
+        </div>
+
+        <div class="manual-control-bar">
+            <span class="manual-control-label">⚙️ 수동 동작 제어</span>
+            <button class="btn-manual-toggle state-off" id="btnManualToggle" onclick="toggleManualLight()" disabled>동작 시작</button>
+        </div>
+        <div class="manual-control-hint" id="manualControlHint"></div>
+
+            <div class="fx-console" id="fxConsole">
+                <header class="fx-header">
+                    <div class="fx-hdr-left">
+                        <span class="fx-hdr-icon">💡</span>
+                        <span class="fx-hdr-title">LED 연출</span>
+                    </div>
+                </header>
+
+                <div class="fx-mode-rail" id="fxModeRail">
+                    <div class="fx-mode-sw active" data-mode="dimmer">
+                        <span class="fx-sw-led"></span>
+                        <svg class="fx-sw-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="5"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" stroke-linecap="round"/></svg>
+                        <span class="fx-sw-label">디머</span>
+                    </div>
+                    <div class="fx-mode-sw" data-mode="breathe">
+                        <span class="fx-sw-led"></span>
+                        <svg class="fx-sw-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12c2-5 5-7 9-7s7 2 9 7c-2 5-5 7-9 7s-7-2-9-7z" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.4"/></svg>
+                        <span class="fx-sw-label">디밍</span>
+                    </div>
+                    <div class="fx-mode-sw" data-mode="blink">
+                        <span class="fx-sw-led"></span>
+                        <svg class="fx-sw-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
+                        <span class="fx-sw-label">점멸</span>
+                    </div>
+                    <div class="fx-mode-sw" data-mode="ontime">
+                        <span class="fx-sw-led"></span>
+                        <svg class="fx-sw-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="7" height="9" rx="1.4"/><rect x="14" y="6" width="7" height="12" rx="1.4"/><path d="M6.5 9V5.5M17.5 6V3.5"/></svg>
+                        <span class="fx-sw-label">ON/OFF</span>
+                    </div>
+                    <div class="fx-mode-sw" data-mode="strobe">
+                        <span class="fx-sw-led"></span>
+                        <svg class="fx-sw-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M17 14v5M14.5 16.5h5M11 2l1.6 4.8L17 8l-4.4 1.2L11 14l-1.6-4.8L5 8l4.4-1.2z"/></svg>
+                        <span class="fx-sw-label">싸이키</span>
+                    </div>
+                </div>
+
+                <div class="fx-preview-zone">
+                    <div class="fx-bulb-wrap">
+                        <div class="fx-bulb-ambient" id="fxAmbient"></div>
+                        <div class="fx-bulb" id="fxBulb"></div>
+                        <div class="fx-bulb-base-ridges"></div>
+                    </div>
+                    <div class="fx-readout">
+                        <div class="fx-readout-value" id="fxReadoutValue">72%</div>
+                        <div class="fx-readout-sub" id="fxReadoutSub">밝기 고정</div>
+                    </div>
+                </div>
+
+                <div class="fx-mode-desc" id="fxModeDesc">밝기를 한 단계로 고정합니다. 페이더를 드래그해 조절하세요.</div>
+
+                <div class="fx-fader-zone" id="fxFaderZone"></div>
+
+                <footer class="fx-footer">
+                    <div class="fx-conn-hint" id="fxConnHint" style="display:none;">제어기에 연결되어 있어야 저장할 수 있습니다.</div>
+                    <button class="fx-btn-save" id="fxBtnSave" onclick="saveLedEffect()">이 연출로 저장</button>
+                </footer>
+            </div>
+
+
+        <div class="toast" id="toast"></div>
+
+        <!-- 원격 디버깅 없이 휴대폰 화면에서 바로 확인할 수 있는 디버그 로그 패널 -->
+        <div id="schedDebugBox" style="display:none; position:fixed; left:8px; right:8px; bottom:8px; max-height:42vh; overflow-y:auto; background:#111; color:#7CFC00; font-family:monospace; font-size:10.5px; line-height:1.5; padding:10px; border-radius:10px; z-index:9999; white-space:pre-wrap; box-shadow:0 4px 16px rgba(0,0,0,0.5);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <b style="color:#fff; font-family:sans-serif;">SCHED 디버그 로그</b>
+                <button onclick="document.getElementById('schedDebugBox').style.display='none'" style="background:#333;color:#fff;border:none;border-radius:5px;padding:3px 10px;font-family:sans-serif;">닫기</button>
+            </div>
+            <div id="schedDebugLines"></div>
+        </div>
+
+        <div class="modal-overlay" id="settingsModalOverlay">
+            <div class="modal-box settings-modal-box">
+                <div class="modal-title">⚙ 설정</div>
+                <div class="settings-menu-list">
+                    <button class="settings-menu-item requires-schedule" onclick="openSettingsItem('reset')">
+                        <span class="settings-menu-icon">🔄</span>
+                        <span class="settings-menu-label">스케줄 초기화</span>
+                        <span class="settings-menu-badge">고급형</span>
+                        <span class="settings-menu-arrow">›</span>
+                    </button>
+                    <button class="settings-menu-item requires-schedule" id="scheduleMenuItem" onclick="openSettingsItem('schedule')">
+                        <span class="settings-menu-icon">📆</span>
+                        <span class="settings-menu-label">주간 스케줄 설정</span>
+                        <span class="settings-menu-badge">고급형</span>
+                        <span class="settings-menu-arrow">›</span>
+                    </button>
+                    <button class="settings-menu-item" onclick="openSettingsItem('password')">
+                        <span class="settings-menu-icon">🔒</span>
+                        <span class="settings-menu-label">비밀번호 설정</span>
+                        <span class="settings-menu-arrow">›</span>
+                    </button>
+                    <button class="settings-menu-item requires-schedule" onclick="openSettingsItem('yearly')">
+                        <span class="settings-menu-icon">📅</span>
+                        <span class="settings-menu-label">년간 스케줄 설정</span>
+                        <span class="settings-menu-badge">고급형</span>
+                        <span class="settings-menu-arrow">›</span>
+                    </button>
+                    <button class="settings-menu-item requires-schedule" onclick="openSettingsItem('holiday')">
+                        <span class="settings-menu-icon">⏸</span>
+                        <span class="settings-menu-label">동작 정지일 지정</span>
+                        <span class="settings-menu-badge">고급형</span>
+                        <span class="settings-menu-arrow">›</span>
+                    </button>
+                    <button class="settings-menu-item" onclick="openSettingsItem('history')">
+                        <span class="settings-menu-icon">📋</span>
+                        <span class="settings-menu-label">동작 이력</span>
+                        <span class="settings-menu-arrow">›</span>
+                    </button>
+                    <button class="settings-menu-item" onclick="openSettingsItem('devicename')">
+                        <span class="settings-menu-icon">🏷️</span>
+                        <span class="settings-menu-label">기기 이름 변경</span>
+                        <span class="settings-menu-arrow">›</span>
+                    </button>
+                    <button class="settings-menu-item" onclick="openSettingsItem('deviceinfo')">
+                        <span class="settings-menu-icon">ℹ️</span>
+                        <span class="settings-menu-label">기기 정보</span>
+                        <span class="settings-menu-arrow">›</span>
+                    </button>
+                </div>
+                <div class="modal-btn-group" style="margin-top: 14px;">
+                    <button class="modal-btn cancel" onclick="closeSettingsModal()" style="flex:1;">닫기</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 1. 스케줄 초기화 확인 -->
+        <div class="modal-overlay" id="resetConfirmModalOverlay">
+            <div class="modal-box">
+                <div class="modal-title">🔄 스케줄 초기화</div>
+                <div class="setting-desc">현재 설정되어 있는 모든 스케줄이 삭제되고<br>초기 상태로 돌아갑니다.<br>계속하시겠습니까?</div>
+                <div class="modal-btn-group" style="margin-top: 14px;">
+                    <button class="modal-btn cancel" onclick="closeResetConfirmModal()">취소</button>
+                    <button class="modal-btn confirm" style="background:#b3452f;" onclick="confirmResetSchedules()">초기화</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2-a. BLE 접속 시 비밀번호 승인 -->
+        <div class="modal-overlay" id="passwordPromptModalOverlay">
+            <div class="modal-box">
+                <div class="modal-title">🔒 제어기 접속 승인</div>
+                <div class="setting-desc">제어기 접속을 승인하려면<br>4자리 비밀번호를 입력하세요.</div>
+                <div class="pw-dots-row" id="pwPromptDots">
+                    <span class="pw-dot"></span><span class="pw-dot"></span><span class="pw-dot"></span><span class="pw-dot"></span>
+                </div>
+                <div class="pw-error-text" id="pwPromptError"></div>
+                <div class="pw-keypad">
+                    <button class="pw-key" onclick="pwPromptInput('1')">1</button>
+                    <button class="pw-key" onclick="pwPromptInput('2')">2</button>
+                    <button class="pw-key" onclick="pwPromptInput('3')">3</button>
+                    <button class="pw-key" onclick="pwPromptInput('4')">4</button>
+                    <button class="pw-key" onclick="pwPromptInput('5')">5</button>
+                    <button class="pw-key" onclick="pwPromptInput('6')">6</button>
+                    <button class="pw-key" onclick="pwPromptInput('7')">7</button>
+                    <button class="pw-key" onclick="pwPromptInput('8')">8</button>
+                    <button class="pw-key" onclick="pwPromptInput('9')">9</button>
+                    <button class="pw-key pw-key-fn" onclick="pwPromptClear()">지우기</button>
+                    <button class="pw-key" onclick="pwPromptInput('0')">0</button>
+                    <button class="pw-key pw-key-fn" onclick="pwPromptBackspace()">⌫</button>
+                </div>
+                <div class="modal-btn-group" style="margin-top: 14px;">
+                    <button class="modal-btn cancel" onclick="cancelPasswordPrompt()" style="flex:1;">취소</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2-b. 비밀번호 변경 (설정 메뉴) -->
+        <div class="modal-overlay" id="passwordChangeModalOverlay">
+            <div class="modal-box">
+                <div class="modal-title">🔒 비밀번호 변경</div>
+                <div class="setting-desc">4자리 숫자로 입력해주세요.</div>
+                <div class="add-form" style="border-top:none; margin-top:6px; padding-top:0;">
+                    <div class="add-form-row">
+                        <span class="add-form-label">현재 비밀번호</span>
+                        <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" class="pw-input" id="pwChangeCurrent">
+                    </div>
+                    <div class="add-form-row">
+                        <span class="add-form-label">새 비밀번호</span>
+                        <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" class="pw-input" id="pwChangeNew1">
+                    </div>
+                    <div class="add-form-row">
+                        <span class="add-form-label">새 비밀번호 확인</span>
+                        <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" class="pw-input" id="pwChangeNew2">
+                    </div>
+                </div>
+                <div class="pw-error-text" id="pwChangeError"></div>
+                <div class="modal-btn-group" style="margin-top: 10px;">
+                    <button class="modal-btn cancel" onclick="closePasswordChangeModal()">취소</button>
+                    <button class="modal-btn confirm" onclick="submitPasswordChange()">변경</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2-c. 기기 이름(BLE 광고 이름) 변경 -->
+        <div class="modal-overlay" id="deviceNameModalOverlay">
+            <div class="modal-box">
+                <div class="modal-title">🏷️ 기기 이름 변경</div>
+                <div class="setting-desc">블루투스 스캔 목록에 표시될 이름입니다. 앞부분(<b id="deviceNamePrefixLabel"></b>)은 고정이며, 뒷부분만 바꿀 수 있습니다 (최대 <span id="deviceNameMaxLenLabel"></span>자).</div>
+                <div class="add-form" style="border-top:none; margin-top:6px; padding-top:0;">
+                    <div class="add-form-row">
+                        <span class="add-form-label" id="deviceNamePrefixLabel2"></span>
+                        <input type="text" class="pw-input" style="width:120px; letter-spacing:normal;" id="deviceNameInput" placeholder="01">
+                    </div>
+                </div>
+                <div class="pw-error-text" id="deviceNameError"></div>
+                <div class="modal-btn-group" style="margin-top: 10px;">
+                    <button class="modal-btn cancel" onclick="closeDeviceNameModal()">취소</button>
+                    <button class="modal-btn confirm" onclick="submitDeviceNameChange()">변경</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. 년간 스케줄 설정 (사용중지 기간) -->
+        <div class="modal-overlay" id="yearlyScheduleModalOverlay">
+            <div class="modal-box sub-modal-box">
+                <div class="modal-title">📅 년간 스케줄 설정</div>
+                <div class="setting-desc">지정한 기간 동안 자동 스케줄 동작을 정지합니다.</div>
+                <div id="yearlyPeriodList"></div>
+                <div class="add-form">
+                    <div class="add-form-row">
+                        <span class="add-form-label">시작일</span>
+                        <input type="date" class="date-input" id="yearlyStartInput">
+                    </div>
+                    <div class="add-form-row">
+                        <span class="add-form-label">종료일</span>
+                        <input type="date" class="date-input" id="yearlyEndInput">
+                    </div>
+                    <button class="btn-add-entry" id="btnAddYearlyPeriod" onclick="addYearlyPeriod()">+ 사용중지 기간 추가</button>
+                    <div class="limit-note" id="yearlyLimitNote">최대 10개까지 등록할 수 있습니다. (현재 0 / 10개)</div>
+                </div>
+                <div class="modal-btn-group" style="margin-top: 12px;">
+                    <button class="modal-btn cancel" onclick="closeYearlyScheduleModal()" style="flex:1;">닫기</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. 동작 정지일 지정 -->
+        <div class="modal-overlay" id="stopDaysModalOverlay">
+            <div class="modal-box sub-modal-box">
+                <div class="modal-title">⏸ 동작 정지일 지정</div>
+                <div class="setting-desc">지정한 날짜에는 스케줄이 동작하지 않습니다.</div>
+                <div id="stopDayList"></div>
+                <div class="add-form">
+                    <div class="add-form-row">
+                        <span class="add-form-label">날짜</span>
+                        <input type="date" class="date-input" id="stopDayInput">
+                    </div>
+                    <label class="yearly-check-row">
+                        <input type="checkbox" id="stopDayYearlyCheck">
+                        매년 반복 (월/일 기준으로 매년 적용)
+                    </label>
+                    <button class="btn-add-entry" id="btnAddStopDay" onclick="addStopDay()">+ 정지일 추가</button>
+                    <div class="limit-note" id="stopDayLimitNote">최대 10개까지 등록할 수 있습니다. (현재 0 / 10개)</div>
+                </div>
+                <div class="modal-btn-group" style="margin-top: 12px;">
+                    <button class="modal-btn cancel" onclick="closeStopDaysModal()" style="flex:1;">닫기</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. 동작 이력 -->
+        <div class="modal-overlay" id="historyModalOverlay">
+            <div class="modal-box sub-modal-box">
+                <div class="modal-title">📋 동작 이력</div>
+                <div class="setting-desc">제어기에 기록된 최근 동작 이력을 표시합니다. (최대 100개)</div>
+                <div id="historyList"><div class="list-empty">제어기에 연결한 뒤 "조회"를 눌러주세요.</div></div>
+                <button class="btn-add-entry" id="btnFetchHistory" onclick="fetchOperationHistory()" style="margin-top:12px;">🔄 조회</button>
+                <div class="modal-btn-group" style="margin-top: 12px;">
+                    <button class="modal-btn cancel" onclick="closeHistoryModal()" style="flex:1;">닫기</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6. 기기 정보 -->
+        <div class="modal-overlay" id="deviceInfoModalOverlay">
+            <div class="modal-box">
+                <div class="modal-title">ℹ️ 기기 정보</div>
+                <div class="device-info-row">
+                    <span class="device-info-label">앱 버전</span>
+                    <span class="device-info-value" id="deviceAppVersion">-</span>
+                </div>
+                <div class="device-info-row">
+                    <span class="device-info-label">조명 제어기 펌웨어</span>
+                    <span class="device-info-value" id="deviceFwVersion">-</span>
+                </div>
+                <div class="device-info-row">
+                    <span class="device-info-label">제조사</span>
+                    <span class="device-info-value" id="deviceManufacturer">-</span>
+                </div>
+                <div class="modal-btn-group" style="margin-top: 14px;">
+                    <button class="modal-btn cancel" onclick="closeDeviceInfoModal()" style="flex:1;">닫기</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 주간 스케줄 설정 (고급형/RTC 탑재 기기에서만 활성화되는 전체화면 모달) -->
+        <div class="modal-overlay" id="scheduleModalOverlay" style="align-items:stretch; padding:0;">
+            <div class="schedule-modal-inner">
+                <div class="schedule-modal-header">
+                    <span class="schedule-modal-title">📆 주간 스케줄 설정</span>
+                    <button class="fx-close-btn" onclick="closeScheduleModal()" aria-label="닫기" style="background:#e8ddc8; color:#8a8074;">✕</button>
+                </div>
+        <div class="scroll-content" id="scheduleListContainer">
+            <div class="schedule-card" id="schedule-1">
+                <div class="schedule-card-header">
+                    <span class="schedule-title-wrap">
+                        <span class="schedule-dot"></span>
+                        <span class="schedule-title">스케줄 #1</span>
+                    </span>
+                </div>
+                
+                <div class="days-row">
+                    <button class="day-btn selected" onclick="toggleDay(this)">월</button>
+                    <button class="day-btn selected" onclick="toggleDay(this)">화</button>
+                    <button class="day-btn selected" onclick="toggleDay(this)">수</button>
+                    <button class="day-btn selected" onclick="toggleDay(this)">목</button>
+                    <button class="day-btn selected" onclick="toggleDay(this)">금</button>
+                    <button class="day-btn selected" onclick="toggleDay(this)">토</button>
+                    <button class="day-btn selected" onclick="toggleDay(this)">일</button>
+                </div>
+
+                <div class="steps-container" id="steps-container-1">
+                    <div class="step-row" id="s1-step-1">
+                        <div class="step-header">
+                            <div class="step-header-top">
+                                <span class="step-label">STEP 1</span>
+                                <div class="step-header-actions">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="time-setting-group">
+                            <div class="time-block" data-mode="sunset" data-offset-sign="+" data-offset-min="0">
+                                <span class="row-badge">ON</span>
+                                <select class="mode-select" onchange="changeTimeMode(this)">
+                                    <option value="manual">직접 지정</option>
+                                    <option value="sunrise">일출 연동</option>
+                                    <option value="sunset" selected>일몰 연동</option>
+                                </select>
+                                <div class="time-inputs-wrap" style="display: none;" onclick="openTimeModal(this)">
+                                    <span class="time-display-text">18 : 00</span>
+                                </div>
+                                <div class="solar-offset-wrap" style="display: flex;" onclick="openOffsetModal(this)">
+                                    <span class="solar-base-info">계산 중...</span>
+                                    <span class="solar-final-info">--:--</span>
+                                </div>
+                            </div>
+
+                            <div class="time-block" data-mode="sunrise" data-offset-sign="+" data-offset-min="0">
+                                <span class="row-badge">OFF</span>
+                                <select class="mode-select" onchange="changeTimeMode(this)">
+                                    <option value="manual">직접 지정</option>
+                                    <option value="sunrise" selected>일출 연동</option>
+                                    <option value="sunset">일몰 연동</option>
+                                </select>
+                                <div class="time-inputs-wrap" style="display: none;" onclick="openTimeModal(this)">
+                                    <span class="time-display-text">06 : 00</span>
+                                </div>
+                                <div class="solar-offset-wrap" style="display: flex;" onclick="openOffsetModal(this)">
+                                    <span class="solar-base-info">계산 중...</span>
+                                    <span class="solar-final-info">--:--</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="warning-text" id="warn-s1-step-1"></div>
+                    </div>
+                </div>
+
+                <button class="add-step-btn" onclick="addStep(1)">+ 스텝 추가 (최대 5개)</button>
+            </div>
+        </div>
+
+        <div style="padding: 10px 15px; background: #fdfbf5; border-top: 1px solid #e8ddc8;">
+            <div class="add-schedule-container">
+                <button class="add-schedule-btn" id="btnAddSchedule" onclick="addSchedule()">+ 스케줄 박스 추가</button>
+                <div class="limit-info" id="limitInfo">스케줄 박스는 최대 7개까지 등록 가능합니다. (현재 1 / 7개)</div>
+            </div>
+        </div>
+
+        <div style="padding: 4px 15px 14px; background: #fdfbf5;">
+            <button class="btn-send" id="btnSend" onclick="sendSchedulesToController()" disabled>스케줄 전송</button>
+        </div>
+            </div>
+        </div>
+
+        <div class="modal-overlay" id="timeModalOverlay">
+            <div class="modal-box">
+                <div class="modal-title" id="timeModalTitle">시간 설정</div>
+                <div class="modal-picker-row">
+                    <div class="picker-column">
+                        <button class="picker-btn" onclick="adjustTime('hour', 1)">▲</button>
+                        <input type="number" id="modalHourInput" class="picker-input" min="0" max="23" value="07">
+                        <button class="picker-btn" onclick="adjustTime('hour', -1)">▼</button>
+                    </div>
+                    <span class="modal-colon">:</span>
+                    <div class="picker-column">
+                        <button class="picker-btn" onclick="adjustTime('minute', 5)">▲</button>
+                        <input type="number" id="modalMinuteInput" class="picker-input" min="0" max="59" value="30">
+                        <button class="picker-btn" onclick="adjustTime('minute', -5)">▼</button>
+                    </div>
+                </div>
+                <div class="modal-btn-group">
+                    <button class="modal-btn cancel" onclick="closeTimeModal(false)">취소</button>
+                    <button class="modal-btn confirm" onclick="closeTimeModal(true)">확인</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-overlay" id="offsetModalOverlay">
+            <div class="modal-box">
+                <div class="modal-title" id="offsetModalTitle">보상 시간 설정</div>
+                <div class="offset-toggle-row">
+                    <button type="button" class="offset-type-btn" id="btnSignMinus" onclick="setOffsetSign('-')">이전 (-)</button>
+                    <button type="button" class="offset-type-btn" id="btnSignPlus" onclick="setOffsetSign('+')">이후 (+)</button>
+                </div>
+                <div class="modal-picker-row">
+                    <div class="picker-column" style="width: 100%;">
+                        <span style="font-size: 11px; font-weight: bold; color: #8a8074;">보상할 시간 (분)</span>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <button class="picker-btn" onclick="adjustOffsetMinute(5)">▲</button>
+                            <input type="number" id="modalOffsetInput" class="picker-input" min="0" max="300" value="30" style="width: 90px;">
+                            <button class="picker-btn" onclick="adjustOffsetMinute(-5)">▼</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-btn-group">
+                    <button class="modal-btn cancel" onclick="closeOffsetModal(false)">취소</button>
+                    <button class="modal-btn confirm" onclick="closeOffsetModal(true)">확인</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 기본 위치 (위도, 경도 - 예: 서울 기준)
+        let currentLat = 37.5665;
+        let currentLng = 126.9780;
+
+        let activeTimeDisplayEl = null;
+        let activeTimeBlockEl = null;
+        let currentOffsetSign = '+';
+
+        // 점멸(반복) 배지에 쓰이는 루프 아이콘 (인라인 SVG, currentColor로 배지 색상 상속)
+
+        // ========================================================================
+        // BLE(Web Bluetooth) 연동 영역
+        // 아래 서비스/특성 UUID와 패킷 포맷은 "임시(placeholder)" 값입니다.
+        // 조명 제어기 펌웨어 측과 최종 프로토콜(GATT 구조, 바이트 포맷)이
+        // 확정되면 BLE_SERVICE_UUID / BLE_SCHEDULE_CHAR_UUID / BLE_RTC_CHAR_UUID 및
+        // buildSchedulePacket() / parseRtcPayload() 함수를 교체해야 합니다.
+        // ========================================================================
+        const BLE_SERVICE_UUID = '0000ffe0-0000-1000-8000-00805f9b34fb'; // TODO: 실제 서비스 UUID로 교체
+        const BLE_SCHEDULE_CHAR_UUID = '0000ffe1-0000-1000-8000-00805f9b34fb'; // TODO: 스케줄 쓰기용 특성
+        const BLE_RTC_CHAR_UUID = '0000ffe2-0000-1000-8000-00805f9b34fb'; // TODO: RTC 읽기/쓰기용 특성
+        const BLE_MANUAL_CHAR_UUID = '0000ffe3-0000-1000-8000-00805f9b34fb'; // 수동 동작 시작/정지 제어용 특성
+        // 아래 2개는 펌웨어 쪽 BLE_PROTOCOL_ADDENDUM.md 기준으로 새로 추가된 특성입니다.
+        const BLE_LOCATION_CHAR_UUID = '0000ffe5-0000-1000-8000-00805f9b34fb'; // 위경도+시간대 전송용
+        const BLE_PIN_CHAR_UUID = '0000ffe6-0000-1000-8000-00805f9b34fb'; // BLE 레벨 PIN 인증용
+        const BLE_DEVICE_NAME_CHAR_UUID = '0000ffe7-0000-1000-8000-00805f9b34fb'; // 기기 이름(BLE 광고 이름) 변경용
+        // LED 연출 설정 (신규) - Write 시 7바이트: [effectMode, brightness, onTimeDs, offTimeDs, breatheSpeedPct, strobeSpeedPct, commit]
+        //   앞 6바이트는 기존과 동일. commit(1B)이 핵심 변경점:
+        //     0 = 실시간 미리보기용(드래그 중 계속 전송) - 제어기는 즉시 조명에 반영만 하고 NVS에는 저장하지 않음
+        //     1 = "이 연출로 저장" 버튼을 눌렀을 때 1회 전송 - 제어기가 NVS에 영구 저장
+        //   제어기는 BLE 연결이 끊길 때도 마지막으로 받은 값을 자동으로 NVS에 저장합니다(안전장치).
+        //   Read 시에는 저장된 6바이트만 돌려줍니다(commit 없음).
+        // effectMode: 0=디머, 1=디밍(브리딩), 2=점멸/ON-OFF(사각파, onTimeDs=offTimeDs면 "점멸"), 3=싸이키
+        // onTimeDs/offTimeDs: 0.1초 단위(1~100 => 0.1~10.0초) / speedPct: 0~100(%)
+        const BLE_EFFECT_CHAR_UUID = '0000ffe8-0000-1000-8000-00805f9b34fb';
+        // 기기 등급(캐패빌리티) - 1바이트 비트마스크. bit0 = CAP_SCHEDULE(RTC 탑재, 고급형 = 주간 스케줄 사용 가능)
+        // 일반형(연출 전용)은 이 비트가 0이거나, 이 특성 자체가 없을 수 있음(구펌웨어) - 두 경우 모두 "스케줄 미지원"으로 안전하게 처리
+        const BLE_CAPS_CHAR_UUID = '0000ffe9-0000-1000-8000-00805f9b34fb'; // TODO: 펌웨어에 아직 미구현 - 추가 작업 필요
+        const CAP_SCHEDULE_BIT = 0x01;
+        // 펌웨어와 동일한 고정 접두사/최대 접미사 길이 (config.h의 DEVICE_NAME_FIXED_PREFIX / MAX_DEVICE_SUFFIX_LEN 참고)
+        const BLE_DEVICE_NAME_PREFIX = 'NARAE_TIMER_';
+        const BLE_DEVICE_NAME_MAX_SUFFIX_LEN = 10;
+
+        let bleDevice = null;
+        let bleServer = null;
+        let bleScheduleChar = null;
+        let bleRtcChar = null;
+        let bleManualChar = null;
+        let bleLocationChar = null;
+        let blePinChar = null;
+        let bleDeviceNameChar = null;
+        let bleEffectChar = null;
+        let bleCapsChar = null;
+        // TODO: 캐패빌리티 특성(0xFFE9)이 펌웨어에 아직 없어서, 지금은 테스트를 위해
+        // 기본값을 "고급형(스케줄 지원)"으로 가정해둡니다. 실제 0xFFE9 특성이 펌웨어에
+        // 추가되면 이 기본값을 다시 false로 되돌리고, connectController()의 판별 로직에
+        // 맡겨야 합니다 (지금도 연결에 성공하면 그 결과가 이 값을 덮어씁니다).
+        let deviceHasSchedule = true;
+        let isConnected = false;
+        let controllerClockBase = null;   // 마지막으로 읽은 제어기 RTC 시각(Date)
+        let controllerClockBaseMs = null; // 그 시각을 읽은 순간의 로컬 타임스탬프(Date.now())
+        let controllerClockTimer = null;  // 1초마다 화면 시계를 갱신하는 타이머
+        let lightStatePollTimer = null;   // 실제 조명 상태를 주기적으로 재확인하는 타이머
+        let manualLightState = 'off'; // 'on' | 'off' - 조명 수동 제어 현재 상태
+
+        function showToast(message, type = '') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast' + (type ? ' ' + type : '');
+            toast.style.display = 'block';
+            clearTimeout(showToast._t);
+            showToast._t = setTimeout(() => { toast.style.display = 'none'; }, 2600);
+        }
+
+        function setConnectionUI(state) {
+            // state: 'disconnected' | 'connecting' | 'connected'
+            const btEl = document.getElementById('btStatus');
+            const syncBtn = document.getElementById('btnSync');
+            const manualBtn = document.getElementById('btnManualToggle');
+            btEl.classList.remove('connected', 'connecting');
+            if (state === 'connected') {
+                btEl.classList.add('connected');
+                btEl.title = '블루투스 연결됨 (탭하여 연결 해제)';
+                syncBtn.disabled = false;
+                manualBtn.disabled = false;
+            } else if (state === 'connecting') {
+                btEl.classList.add('connecting');
+                btEl.title = '연결 중...';
+                syncBtn.disabled = true;
+                manualBtn.disabled = true;
+            } else {
+                btEl.title = '블루투스 미연결 (탭하여 연결)';
+                syncBtn.disabled = true;
+                manualBtn.disabled = true;
+                document.getElementById('rtcValueLabel').textContent = '-';
+            }
+            updateManualControlUI();
+            validateSendButtonState();
+            fxUpdateSaveAvailability();
+        }
+
+        function onBtStatusClick() {
+            if (isConnected) {
+                disconnectController();
+            } else {
+                connectController();
+            }
+        }
+
+        async function connectController() {
+            if (!navigator.bluetooth) {
+                showToast('이 브라우저는 Web Bluetooth를 지원하지 않습니다.', 'error');
+                return;
+            }
+            try {
+                setConnectionUI('connecting');
+                // 펌웨어가 광고 패킷 용량(31바이트) 제약 때문에 서비스 UUID 대신
+                // 이름 접두사로 광고합니다 - 그래서 여기서도 namePrefix로 찾습니다.
+                bleDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ namePrefix: BLE_DEVICE_NAME_PREFIX }],
+                    optionalServices: [BLE_SERVICE_UUID, DEVICE_INFO_SERVICE_UUID]
+                });
+                bleDevice.addEventListener('gattserverdisconnected', onControllerDisconnected);
+
+                bleServer = await bleDevice.gatt.connect();
+                const service = await bleServer.getPrimaryService(BLE_SERVICE_UUID);
+
+                // 연결 직후에는 특성(Characteristic) 검색이 완전히 안정되기 전이라 getCharacteristic()이
+                // 간헐적으로 실패할 수 있습니다(안드로이드 Web Bluetooth에서 흔한 타이밍 이슈 - 실제로는
+                // 특성이 있는데도 "못 찾음" 에러가 남). 짧은 재시도를 붙여서 이런 일시적 실패를 흡수합니다.
+                const getCharWithRetry = async (svc, uuid, retries = 2, delayMs = 300) => {
+                    for (let attempt = 0; attempt <= retries; attempt++) {
+                        try {
+                            return await svc.getCharacteristic(uuid);
+                        } catch (err) {
+                            if (attempt === retries) throw err;
+                            console.warn(`특성(${uuid}) 검색 실패, 재시도 ${attempt + 1}/${retries}:`, err.message);
+                            await new Promise(r => setTimeout(r, delayMs));
+                        }
+                    }
+                };
+
+                bleScheduleChar = await getCharWithRetry(service, BLE_SCHEDULE_CHAR_UUID);
+                bleRtcChar = await getCharWithRetry(service, BLE_RTC_CHAR_UUID);
+                bleManualChar = await getCharWithRetry(service, BLE_MANUAL_CHAR_UUID);
+                bleLocationChar = await getCharWithRetry(service, BLE_LOCATION_CHAR_UUID);
+                blePinChar = await getCharWithRetry(service, BLE_PIN_CHAR_UUID);
+                bleDeviceNameChar = await getCharWithRetry(service, BLE_DEVICE_NAME_CHAR_UUID);
+                // 펌웨어에 아직 구현되지 않았을 수 있으므로 실패해도 연결 자체는 계속 진행
+                bleEffectChar = await getCharWithRetry(service, BLE_EFFECT_CHAR_UUID, 1).catch(() => null);
+                bleCapsChar = await getCharWithRetry(service, BLE_CAPS_CHAR_UUID, 1).catch(() => null);
+
+                // 기기 등급 판별: caps 특성이 있으면 그 값을 그대로 따른다.
+                // 특성 자체가 없는 기기(현재 펌웨어 - 아직 0xFFE9 미구현)는 판별 불가능하므로
+                // 이전 값(기본값: 테스트를 위해 고급형으로 가정)을 그대로 유지한다.
+                if (bleCapsChar) {
+                    try {
+                        const capsValue = await bleCapsChar.readValue();
+                        deviceHasSchedule = !!(capsValue.getUint8(0) & CAP_SCHEDULE_BIT);
+                    } catch (err) {
+                        console.warn('기기 caps 읽기 실패 - 이전 값 유지:', err);
+                    }
+                }
+                updateScheduleMenuAvailability();
+
+                // 제어기가 PIN의 "기준(source of truth)"이 되도록, 연결 직후 제어기에
+                // 저장된 현재 PIN을 읽어와 로컬(localStorage) 값과 다르면 맞춰준다.
+                // (예: SW1을 5초 이상 눌러 제어기 쪽 PIN이 0000으로 초기화된 경우에도
+                //  앱이 자동으로 이를 인지해서 정상적으로 인증 절차를 진행할 수 있다.)
+                await syncPasswordFromController();
+
+                // 물리적 BLE 연결 성공 후, 4자리 비밀번호로 접속을 한 번 더 승인받는다.
+                const approved = await requestPasswordApproval();
+                if (!approved) {
+                    bleDevice.gatt.disconnect();
+                    isConnected = false;
+                    setConnectionUI('disconnected');
+                    showToast('비밀번호 인증이 취소되어 연결을 종료했습니다.', 'error');
+                    return;
+                }
+
+                // 앱 화면에서 승인받은 것과 동일한 PIN을 제어기에도 전송해
+                // 실제 BLE 레벨 쓰기 권한을 얻는다(스펙 부록 B 참고).
+                await sendPinToController(getStoredPassword());
+
+                isConnected = true;
+                setConnectionUI('connected');
+                document.getElementById('locationLabel').textContent =
+                    document.getElementById('locationLabel').textContent; // 위치 라벨 유지
+
+                // 일출/일몰 계산에 쓰이는 위경도+시간대를 제어기에도 전달(스펙 부록 A 참고).
+                await sendLocationToController();
+
+                if (deviceHasSchedule) {
+                    await readControllerRtc();
+                    await readSchedulesFromController();
+                } else {
+                    document.getElementById('rtcValueLabel').textContent = '스케줄 미지원 기기';
+                }
+                await readManualLightState();
+                startLightStatePolling();
+                showToast('조명 제어기에 연결되었습니다.', 'success');
+            } catch (err) {
+                console.error(err);
+                isConnected = false;
+                setConnectionUI('disconnected');
+                showToast('연결에 실패했습니다: ' + err.message, 'error');
+            }
+        }
+
+        function disconnectController() {
+            if (bleDevice && bleDevice.gatt.connected) {
+                bleDevice.gatt.disconnect();
+            } else {
+                onControllerDisconnected();
+            }
+        }
+
+        function onControllerDisconnected() {
+            isConnected = false;
+            bleServer = null;
+            bleScheduleChar = null;
+            bleRtcChar = null;
+            bleManualChar = null;
+            bleLocationChar = null;
+            blePinChar = null;
+            bleDeviceNameChar = null;
+            bleEffectChar = null;
+            bleCapsChar = null;
+            // deviceHasSchedule은 일부러 리셋하지 않습니다 - 캐패빌리티 특성이 아직 없는
+            // 펌웨어 기준으로는 연결 해제만으로 등급을 다시 알 수 없기 때문에, 마지막으로
+            // 확인된(또는 테스트 기본값) 상태를 그대로 유지합니다.
+            updateScheduleMenuAvailability();
+            stopControllerClockTicker();
+            stopLightStatePolling();
+            setConnectionUI('disconnected');
+            showToast('제어기 연결이 해제되었습니다.');
+        }
+
+        // ---- PIN 인증 (BLE 레벨) ----
+        // 제어기는 4바이트(각 자리 숫자를 그대로 정수값으로) write를 PIN 인증 시도로 처리한다.
+        // 예: "1234" -> [1, 2, 3, 4] (ASCII 코드가 아니라 실제 숫자값)
+        async function sendPinToController(pin) {
+            if (!blePinChar) return;
+            try {
+                const bytes = Uint8Array.from(String(pin), ch => ch.charCodeAt(0) - 48);
+                await blePinChar.writeValue(bytes);
+            } catch (err) {
+                console.error('PIN 전송 실패:', err);
+                showToast('제어기 PIN 인증 전송에 실패했습니다: ' + err.message, 'error');
+            }
+        }
+
+        // 제어기에 저장된 현재 PIN을 읽어와, 로컬(localStorage) 값과 다르면 제어기 값으로 맞춘다.
+        // 제어기가 PIN의 기준(source of truth) 역할을 하도록 하기 위함.
+        async function syncPasswordFromController() {
+            if (!blePinChar) return;
+            try {
+                const value = await blePinChar.readValue();
+                if (value.byteLength < 4) return;
+                const bytes = new Uint8Array(value.buffer, value.byteOffset, 4);
+                const controllerPin = Array.from(bytes).join('');
+                if (controllerPin !== getStoredPassword()) {
+                    setStoredPassword(controllerPin);
+                    console.log('제어기 PIN과 로컬 저장값이 달라 제어기 기준으로 동기화했습니다.');
+                }
+            } catch (err) {
+                // 읽기에 실패해도 치명적이지 않음 - 로컬에 저장된 값으로 계속 진행
+                console.warn('제어기 PIN 읽기 실패, 로컬 저장값으로 진행:', err);
+            }
+        }
+
+        // ---- 위치(위경도) + 시간대 전송 ----
+        // 포맷: lat(float32,4B) + lng(float32,4B) + tzOffsetMinutes(int16,2B) = 10바이트, 리틀엔디안
+        function buildLocationPacket(lat, lng, tzOffsetMinutes) {
+            const buf = new ArrayBuffer(10);
+            const view = new DataView(buf);
+            view.setFloat32(0, lat, true);
+            view.setFloat32(4, lng, true);
+            view.setInt16(8, tzOffsetMinutes, true);
+            return new Uint8Array(buf);
+        }
+
+        async function sendLocationToController() {
+            if (!isConnected || !bleLocationChar) return;
+            if (typeof currentLat !== 'number' || typeof currentLng !== 'number') return;
+            try {
+                const tzOffsetMinutes = -new Date().getTimezoneOffset(); // 예: KST -> +540
+                const packet = buildLocationPacket(currentLat, currentLng, tzOffsetMinutes);
+                await bleLocationChar.writeValue(packet);
+            } catch (err) {
+                console.error('위치 전송 실패:', err);
+                showToast('제어기로 위치 정보 전송에 실패했습니다: ' + err.message, 'error');
+            }
+        }
+
+        // 제어기의 RTC(현재 설정된 시각)를 읽어와 표시하고, 이후로는 로컬에서 1초마다
+        // 흘려서 마치 실시간 시계처럼 계속 째깍거리게 한다(재연결/재동기화 전까지).
+        async function readControllerRtc() {
+            if (!isConnected || !bleRtcChar) return;
+            try {
+                // 연결 직후 가장 먼저 실행되는 GATT 읽기라 안드로이드에서 "아직 연결이
+                // 완전히 안정되지 않은 상태"일 가능성이 가장 높습니다. 스케줄 읽기와
+                // 마찬가지로 잠깐 숨 고르기용 딜레이를 두고 시작합니다.
+                await new Promise(r => setTimeout(r, 300));
+
+                let value;
+                const maxAttempts = 4;
+                for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                    try {
+                        value = await bleRtcChar.readValue();
+                        break;
+                    } catch (readErr) {
+                        schedDebugLog(`[RTC] 시도 ${attempt}: 읽기 실패 - ${readErr.message}`);
+                        if (attempt === maxAttempts) throw readErr;
+                        await new Promise(r => setTimeout(r, 500));
+                    }
+                }
+                const rtcDate = parseRtcPayload(value);
+                controllerClockBase = rtcDate;
+                controllerClockBaseMs = Date.now();
+                document.getElementById('rtcValueLabel').textContent = formatRtcDate(rtcDate);
+                startControllerClockTicker();
+            } catch (err) {
+                console.error(err);
+                schedDebugLog(`[RTC] 최종 실패: ${err.message}`);
+                document.getElementById('rtcValueLabel').textContent = '읽기 실패';
+            }
+        }
+
+        function startControllerClockTicker() {
+            if (controllerClockTimer) clearInterval(controllerClockTimer);
+            controllerClockTimer = setInterval(() => {
+                if (!controllerClockBase) return;
+                const elapsedMs = Date.now() - controllerClockBaseMs;
+                const liveDate = new Date(controllerClockBase.getTime() + elapsedMs);
+                document.getElementById('rtcValueLabel').textContent = formatRtcDate(liveDate);
+            }, 1000);
+        }
+
+        function stopControllerClockTicker() {
+            if (controllerClockTimer) {
+                clearInterval(controllerClockTimer);
+                controllerClockTimer = null;
+            }
+            controllerClockBase = null;
+            controllerClockBaseMs = null;
+        }
+
+        // TODO: 실제 제어기 RTC 응답 포맷(바이트 구조)에 맞춰 파싱 로직 교체
+        // 임시 포맷 가정: 7바이트 [연도-2000, 월, 일, 시, 분, 초, 요일]
+        function parseRtcPayload(dataView) {
+            if (dataView.byteLength >= 6) {
+                const year = 2000 + dataView.getUint8(0);
+                const month = dataView.getUint8(1);
+                const day = dataView.getUint8(2);
+                const hour = dataView.getUint8(3);
+                const minute = dataView.getUint8(4);
+                const second = dataView.getUint8(5);
+                return new Date(year, month - 1, day, hour, minute, second);
+            }
+            return new Date();
+        }
+
+        function formatRtcDate(d) {
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        }
+
+        // 폰의 현재 로컬 시각을 제어기 RTC에 기록(동기화)
+        async function syncControllerRtc() {
+            if (!isConnected || !bleRtcChar) {
+                showToast('먼저 제어기에 연결해주세요.', 'error');
+                return;
+            }
+            try {
+                const now = new Date();
+                // TODO: 실제 포맷 확정 전까지의 임시 인코딩 (위 parseRtcPayload와 대칭)
+                const buf = new Uint8Array([
+                    now.getFullYear() - 2000,
+                    now.getMonth() + 1,
+                    now.getDate(),
+                    now.getHours(),
+                    now.getMinutes(),
+                    now.getSeconds(),
+                    now.getDay()
+                ]);
+                await bleRtcChar.writeValue(buf);
+                showToast('제어기 시각이 동기화되었습니다.', 'success');
+                await readControllerRtc();
+            } catch (err) {
+                console.error(err);
+                showToast('동기화 실패: ' + err.message, 'error');
+            }
+        }
+
+        // ---- 제어기 수동 동작 제어 (동작 시작 / 동작 정지 토글) ----
+        // "점등/소등"이 아니라 "제어기 동작 자체를 개시/정지"하는 개념입니다.
+        // 동작 시작 시엔 저장된 연출(디머/디밍/점멸/싸이키)이 그대로 재생되고,
+        // 동작 정지 시엔 연출 재생 자체가 멈춥니다 (제어기 main.cpp 참고).
+        function updateManualControlUI() {
+            const btn = document.getElementById('btnManualToggle');
+            const hint = document.getElementById('manualControlHint');
+            if (manualLightState === 'on') {
+                btn.textContent = '⏸ 동작 정지';
+                btn.classList.remove('state-off');
+                btn.classList.add('state-on');
+                hint.textContent = '';
+                hint.classList.remove('show');
+            } else {
+                btn.textContent = '▶ 동작 시작';
+                btn.classList.remove('state-on');
+                btn.classList.add('state-off');
+                if (isConnected) {
+                    hint.textContent = '⏱ 수동으로 정지된 상태이며, 다음 예정된 스케줄 시각이 되면 자동으로 스케줄에 따라 다시 동작합니다.';
+                    hint.classList.add('show');
+                } else {
+                    hint.textContent = '';
+                    hint.classList.remove('show');
+                }
+            }
+        }
+
+        // 제어기가 지금 "동작 중"인지(수동/스케줄 어느 쪽이 원인이든)를 읽어와 버튼에 반영
+        async function readManualLightState() {
+            if (!isConnected || !bleManualChar) return;
+            try {
+                const value = await bleManualChar.readValue();
+                if (value.byteLength < 1) return;
+                manualLightState = value.getUint8(0) === 1 ? 'on' : 'off';
+                updateManualControlUI();
+            } catch (err) {
+                console.error('조명 상태 읽기 실패:', err);
+            }
+        }
+
+        function startLightStatePolling() {
+            if (lightStatePollTimer) clearInterval(lightStatePollTimer);
+            lightStatePollTimer = setInterval(readManualLightState, 5000);
+        }
+
+        function stopLightStatePolling() {
+            if (lightStatePollTimer) {
+                clearInterval(lightStatePollTimer);
+                lightStatePollTimer = null;
+            }
+        }
+
+        async function toggleManualLight() {
+            if (!isConnected || !bleManualChar) {
+                showToast('먼저 제어기에 연결해주세요.', 'error');
+                return;
+            }
+            const newState = manualLightState === 'on' ? 'off' : 'on';
+            try {
+                const buf = new Uint8Array([newState === 'on' ? 1 : 0]);
+                await bleManualChar.writeValue(buf);
+                manualLightState = newState;
+                updateManualControlUI();
+                showToast(newState === 'on' ? '동작을 시작했습니다.' : '동작을 정지했습니다.', 'success');
+            } catch (err) {
+                console.error(err);
+                showToast('수동 제어 명령 전송 실패: ' + err.message, 'error');
+            }
+        }
+
+        // ---- 전송 전 유효성 검증 ----
+        // 6번 요구사항: 마지막 스케줄에 요일이 하나도 선택되지 않았으면 스케줄 추가 불가.
+        //              스케줄 1은 요일이 최소 1개 선택되어야 전송 가능.
+        function scheduleHasSelectedDay(cardEl) {
+            return cardEl.querySelectorAll('.day-btn.selected').length > 0;
+        }
+
+        // ---- 미저장 변경사항 추적 ----
+        // "마지막으로 제어기와 동기화된 상태"(연결 직후 읽어온 값, 또는 마지막 전송 성공 시점)를
+        // 기준으로 지금 화면 상태가 달라졌는지 비교해서, 달라진 게 없으면 전송 버튼을 비활성화한다.
+        let lastSyncedPacketKey = null;
+
+        function currentPacketKey() {
+            return Array.from(buildSchedulePacket()).join(',');
+        }
+
+        function markScheduleSynced() {
+            lastSyncedPacketKey = currentPacketKey();
+            validateSendButtonState();
+            updateUnsavedIndicator();
+        }
+
+        function hasUnsavedChanges() {
+            if (lastSyncedPacketKey === null) return true; // 아직 동기화 기준이 없으면 변경된 것으로 간주
+            return currentPacketKey() !== lastSyncedPacketKey;
+        }
+
+        function updateUnsavedIndicator() {
+            const dot = document.getElementById('unsavedDot');
+            if (!dot) return;
+            const show = isConnected && deviceHasSchedule && hasUnsavedChanges();
+            dot.style.display = show ? 'inline-block' : 'none';
+        }
+
+        function updateAddScheduleButtonState() {
+            const container = document.getElementById('scheduleListContainer');
+            const cards = container.getElementsByClassName('schedule-card');
+            const addBtn = document.getElementById('btnAddSchedule');
+            const limitInfo = document.getElementById('limitInfo');
+            if (cards.length === 0) { addBtn.disabled = false; return; }
+            const lastCard = cards[cards.length - 1];
+            const lastHasDay = scheduleHasSelectedDay(lastCard);
+            const atLimit = cards.length >= 7;
+            addBtn.disabled = atLimit || !lastHasDay;
+            if (!lastHasDay) {
+                limitInfo.classList.add('warn');
+                limitInfo.textContent = '마지막 스케줄에 요일을 최소 1개 선택해야 다음 스케줄을 추가할 수 있습니다.';
+            } else {
+                limitInfo.classList.remove('warn');
+                updateLimitInfo();
+            }
+        }
+
+        function validateSendButtonState() {
+            const sendBtn = document.getElementById('btnSend');
+            const schedule1 = document.getElementById('schedule-1');
+            const schedule1Ok = schedule1 && scheduleHasSelectedDay(schedule1);
+            const noChanges = isConnected && !hasUnsavedChanges();
+            sendBtn.disabled = !isConnected || !deviceHasSchedule || !schedule1Ok || noChanges;
+            sendBtn.textContent = noChanges ? '변경사항 없음' : '스케줄 전송';
+            updateUnsavedIndicator();
+        }
+
+        // ---- STEP 간 시간 겹침 검증 (정렬 강제는 하지 않음, 경고만 표시) ----
+        function timeBlockToMinutes(timeBlock) {
+            const mode = timeBlock.getAttribute('data-mode');
+            if (mode === 'manual') {
+                const text = timeBlock.querySelector('.time-display-text').textContent.trim();
+                const [h, m] = text.split(':').map(s => parseInt(s.trim(), 10) || 0);
+                return h * 60 + m;
+            }
+            // 일출/일몰 연동: 오늘자 계산값(저장 시점 기준)으로 겹침을 판단
+            const sign = timeBlock.getAttribute('data-offset-sign');
+            const off = parseInt(timeBlock.getAttribute('data-offset-min')) || 0;
+            const sunTimes = calculateSunTimes(currentLat, currentLng);
+            const base = mode === 'sunrise' ? sunTimes.sunrise.totalMin : sunTimes.sunset.totalMin;
+            let total = sign === '+' ? base + off : base - off;
+            total = ((total % 1440) + 1440) % 1440;
+            return total;
+        }
+
+        function checkStepOverlap(schNum) {
+            const stepsContainer = document.getElementById(`steps-container-${schNum}`);
+            if (!stepsContainer) return;
+            const steps = Array.from(stepsContainer.getElementsByClassName('step-row'));
+            const ranges = steps.map(step => {
+                const blocks = step.querySelectorAll('.time-block');
+                const onMin = timeBlockToMinutes(blocks[0]);
+                let offMin = timeBlockToMinutes(blocks[1]);
+                if (offMin <= onMin) offMin += 1440; // 자정을 넘어가는 구간 처리
+                return { id: step.id, onMin, offMin };
+            });
+
+            // 상위(앞) STEP에는 경고를 표시하지 않고, 하위(뒤) STEP에서만
+            // "몇 번 STEP과 겹치는지"를 표시한다. 상위 STEP은 하위 STEP의
+            // 문구를 참고하면 되므로 별도 경고가 필요 없다.
+            steps.forEach((step, i) => {
+                const warnEl = step.querySelector('.warning-text');
+                if (!warnEl) return;
+                const overlappedWith = [];
+                for (let j = 0; j < i; j++) {
+                    const a = ranges[i], b = ranges[j];
+                    if (a.onMin < b.offMin && b.onMin < a.offMin) overlappedWith.push(j + 1);
+                }
+                if (overlappedWith.length > 0) {
+                    const stepList = overlappedWith.join(', ');
+                    warnEl.textContent = `⚠️ STEP ${stepList}과 ON/OFF 시간이 겹칩니다.`;
+                    warnEl.classList.add('show');
+                } else {
+                    warnEl.textContent = '';
+                    warnEl.classList.remove('show');
+                }
+            });
+        }
+
+        function checkAllOverlaps() {
+            const container = document.getElementById('scheduleListContainer');
+            const cards = Array.from(container.getElementsByClassName('schedule-card'));
+            cards.forEach(card => {
+                const num = card.id.replace('schedule-', '');
+                checkStepOverlap(num);
+            });
+        }
+
+        // ---- 스케줄 데이터 → 전송 패킷 빌드 ----
+        // TODO: 최종 GATT 패킷 포맷은 펌웨어팀과 협의 후 buildSchedulePacket()을 교체할 것.
+        // 임시 초안: 스케줄마다 [요일비트마스크(1B), STEP수(1B), STEP*10B]
+        //   STEP 10B = ON[mode(1B),hour(1B),min(1B),offSign(1B),offMin(1B)]
+        //            + OFF[동일 5B]
+        //   mode: 0=수동, 1=일출연동, 2=일몰연동 / offSign: 0='-', 1='+'
+        //   (반복/점멸 설정은 STEP에서 제거되었습니다 - 조명 연출은 별도의 "LED 연출" 화면에서 다룹니다)
+        const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일'];
+
+        function encodeTimeBlock(timeBlock) {
+            const mode = timeBlock.getAttribute('data-mode');
+            const modeCode = mode === 'sunrise' ? 1 : (mode === 'sunset' ? 2 : 0);
+            let hour = 0, minute = 0;
+            if (mode === 'manual') {
+                const text = timeBlock.querySelector('.time-display-text').textContent.trim();
+                const parts = text.split(':').map(s => parseInt(s.trim(), 10) || 0);
+                hour = parts[0]; minute = parts[1];
+            }
+            const offSign = timeBlock.getAttribute('data-offset-sign') === '+' ? 1 : 0;
+            const offMin = parseInt(timeBlock.getAttribute('data-offset-min')) || 0;
+            return [modeCode, hour, minute, offSign, offMin];
+        }
+
+        function buildSchedulePacket() {
+            const container = document.getElementById('scheduleListContainer');
+            const cards = Array.from(container.getElementsByClassName('schedule-card'));
+            const bytes = [];
+            bytes.push(cards.length);
+            cards.forEach(card => {
+                let dayMask = 0;
+                const dayBtns = card.querySelectorAll('.day-btn');
+                dayBtns.forEach((btn, idx) => {
+                    if (btn.classList.contains('selected')) dayMask |= (1 << idx);
+                });
+                const steps = Array.from(card.querySelectorAll('.step-row'));
+                bytes.push(dayMask, steps.length);
+                steps.forEach(step => {
+                    const blocks = step.querySelectorAll('.time-block');
+                    bytes.push(...encodeTimeBlock(blocks[0]));
+                    bytes.push(...encodeTimeBlock(blocks[1]));
+                });
+            });
+            return new Uint8Array(bytes);
+        }
+
+        // ---- 전송 패킷 → 스케줄 데이터 (역방향 디코딩, BLE에서 읽어온 값을 화면에 복원할 때 사용) ----
+        function decodeTimeBlock(bytes, offset) {
+            const modeCode = bytes[offset];
+            const hour = bytes[offset + 1];
+            const minute = bytes[offset + 2];
+            const offSign = bytes[offset + 3];
+            const offMin = bytes[offset + 4];
+            const mode = modeCode === 1 ? 'sunrise' : (modeCode === 2 ? 'sunset' : 'manual');
+            return { mode, hour, minute, offsetSign: offSign === 1 ? '+' : '-', offsetMin: offMin };
+        }
+
+        // truncated: true면 데이터가 도중에 잘렸다는 뜻(모바일 BLE 긴 읽기 실패 등) -
+        // 이 경우 schedules는 신뢰할 수 없는 부분 데이터이므로 호출부에서 재시도해야 합니다.
+        function parseSchedulePacket(dataView) {
+            const bytes = new Uint8Array(dataView.buffer, dataView.byteOffset, dataView.byteLength);
+            const schedules = [];
+            if (bytes.length < 1) return { schedules, truncated: false };
+            let idx = 0;
+            const schedCount = bytes[idx++];
+            let truncated = false;
+            for (let s = 0; s < schedCount; s++) {
+                if (idx + 2 > bytes.length) { truncated = true; break; }
+                const dayMask = bytes[idx++];
+                const stepCount = bytes[idx++];
+                const steps = [];
+                for (let st = 0; st < stepCount; st++) {
+                    if (idx + 10 > bytes.length) { truncated = true; break; }
+                    const on = decodeTimeBlock(bytes, idx);
+                    const off = decodeTimeBlock(bytes, idx + 5);
+                    steps.push({ on, off });
+                    idx += 10;
+                }
+                if (steps.length < stepCount) truncated = true; // 선언된 스텝 수보다 적게 읽힘 = 잘림
+                schedules.push({ dayMask, steps });
+            }
+            return { schedules, truncated };
+        }
+
+        // ---- 파싱된 스케줄 데이터 → 화면(DOM) 복원 ----
+        function timeBlockHtml(rowBadge, tb) {
+            const pad = n => String(n).padStart(2, '0');
+            const isManual = tb.mode === 'manual';
+            const modeOptions = `
+                <option value="manual" ${isManual ? 'selected' : ''}>직접 지정</option>
+                <option value="sunrise" ${tb.mode === 'sunrise' ? 'selected' : ''}>일출 연동</option>
+                <option value="sunset" ${tb.mode === 'sunset' ? 'selected' : ''}>일몰 연동</option>
+            `;
+            return `
+                <div class="time-block" data-mode="${tb.mode}" data-offset-sign="${tb.offsetSign}" data-offset-min="${tb.offsetMin}">
+                    <span class="row-badge">${rowBadge}</span>
+                    <select class="mode-select" onchange="changeTimeMode(this)">${modeOptions}</select>
+                    <div class="time-inputs-wrap" style="display: ${isManual ? 'flex' : 'none'};" onclick="openTimeModal(this)">
+                        <span class="time-display-text">${pad(tb.hour)} : ${pad(tb.minute)}</span>
+                    </div>
+                    <div class="solar-offset-wrap" style="display: ${isManual ? 'none' : 'flex'};" onclick="openOffsetModal(this)">
+                        <span class="solar-base-info">계산 중...</span>
+                        <span class="solar-final-info">--:--</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        function stepRowHtml(schNum, stepNum, step) {
+            return `
+                <div class="step-row" id="s${schNum}-step-${stepNum}">
+                    <div class="step-header">
+                        <div class="step-header-top">
+                            <span class="step-label">STEP ${stepNum}</span>
+                            <div class="step-header-actions">
+                                ${stepNum > 1 ? `<button class="step-delete" onclick="removeStep(${schNum}, ${stepNum})">삭제</button>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="time-setting-group">
+                        ${timeBlockHtml('ON', step.on)}
+                        ${timeBlockHtml('OFF', step.off)}
+                    </div>
+                    <div class="warning-text" id="warn-s${schNum}-step-${stepNum}"></div>
+                </div>
+            `;
+        }
+
+        function scheduleCardHtml(schNum, schedule) {
+            const dayBtnsHtml = DAY_LABELS.map((label, idx) => {
+                const selected = (schedule.dayMask & (1 << idx)) ? 'selected' : '';
+                return `<button class="day-btn ${selected}" onclick="toggleDay(this)">${label}</button>`;
+            }).join('');
+            const deleteBtnHtml = schNum > 1
+                ? `<button class="schedule-delete-btn" onclick="removeSchedule(${schNum})">스케줄 삭제</button>`
+                : '';
+            const stepsHtml = schedule.steps.map((step, i) => stepRowHtml(schNum, i + 1, step)).join('');
+            return `
+                <div class="schedule-card" id="schedule-${schNum}">
+                    <div class="schedule-card-header">
+                        <span class="schedule-title-wrap">
+                            <span class="schedule-dot"></span>
+                            <span class="schedule-title">스케줄 #${schNum}</span>
+                        </span>
+                        ${deleteBtnHtml}
+                    </div>
+                    <div class="days-row">${dayBtnsHtml}</div>
+                    <div class="steps-container" id="steps-container-${schNum}">${stepsHtml}</div>
+                    <button class="add-step-btn" onclick="addStep(${schNum})">+ 스텝 추가 (최대 5개)</button>
+                </div>
+            `;
+        }
+
+        // 스케줄이 완전히 비어있을 때(공장 초기 상태 등) 보여줄 기본값:
+        // ON = 일몰(보상 없음, 정각), OFF = 일출(보상 없음, 정각), 요일은 매일.
+        function getDefaultScheduleData() {
+            return {
+                dayMask: 0b1111111, // 월~일 전체 선택
+                steps: [{
+                    on: { mode: 'sunset', hour: 18, minute: 0, offsetSign: '+', offsetMin: 0 },
+                    off: { mode: 'sunrise', hour: 6, minute: 0, offsetSign: '+', offsetMin: 0 }
+                }]
+            };
+        }
+
+        function applyDefaultScheduleToDom() {
+            const container = document.getElementById('scheduleListContainer');
+            container.innerHTML = scheduleCardHtml(1, getDefaultScheduleData());
+            updateLimitInfo();
+            refreshAllSolarTimes();
+            checkAllOverlaps();
+            updateAddScheduleButtonState();
+        }
+
+        // 제어기에서 읽어온 스케줄 데이터로 화면 전체를 다시 그린다.
+        function renderSchedulesFromParsed(schedules) {
+            if (!schedules || schedules.length === 0) {
+                // 제어기에 저장된 스케줄이 정말 0개인 상태(공장 초기화 등) -> 기본값으로 채워서 보여주되,
+                // "동기화 기준"은 실제 제어기 상태(스케줄 0개)로 잡아서 전송 버튼이 올바르게 활성화되게 한다.
+                applyDefaultScheduleToDom();
+                lastSyncedPacketKey = '0';
+                validateSendButtonState();
+                return;
+            }
+            const container = document.getElementById('scheduleListContainer');
+            container.innerHTML = schedules.map((sch, i) => scheduleCardHtml(i + 1, sch)).join('');
+            updateLimitInfo();
+            refreshAllSolarTimes();
+            checkAllOverlaps();
+            updateAddScheduleButtonState();
+            markScheduleSynced();
+        }
+
+        // 제어기의 RTC를 읽듯, Schedule 특성을 read해서 현재 저장된 스케줄을 화면에 복원
+        // 원격 디버깅(chrome://inspect) 없이도 휴대폰 화면에서 바로 로그를 볼 수 있도록,
+        // console에는 항상 남기고, 화면 패널은 필요할 때만(showSchedDebugPanel=true) 띄웁니다.
+        // 통신이 안정된 이후로는 평상시에 자동으로 뜨지 않습니다 - 다시 문제가 생기면
+        // showSchedDebugPanel을 true로 바꿔서 켤 수 있습니다.
+        let showSchedDebugPanel = false;
+        function schedDebugLog(line) {
+            console.log(line);
+            if (!showSchedDebugPanel) return;
+            const box = document.getElementById('schedDebugBox');
+            const lines = document.getElementById('schedDebugLines');
+            if (!box || !lines) return;
+            const p = document.createElement('div');
+            p.textContent = line;
+            lines.appendChild(p);
+            box.style.display = 'block';
+            box.scrollTop = box.scrollHeight;
+        }
+
+        async function readSchedulesFromController() {
+            if (!isConnected || !bleScheduleChar) return;
+            try {
+                // 연결 직후에는 GATT 작업들이 촘촘하게 몰리면 안드로이드에서
+                // "GATT operation failed for unknown reason" 같은 일시적 에러가 흔히 납니다.
+                // 잠깐 숨 고르기용 딜레이를 하나 두고 시작합니다.
+                await new Promise(r => setTimeout(r, 300));
+
+                // 스케줄 특성은 최대 512바이트라 여러 번 나눠서(long read) 와야 하는데,
+                // 모바일 브라우저(특히 안드로이드 크롬)는 이 나눠읽기를 가끔 끝까지 못 받거나
+                // (일부만 받은 채로 끝남) 읽기 자체가 통째로 실패하기도 합니다. 그러면 실제로는
+                // 저장돼있는 스케줄이 초기화된 것처럼 보입니다. 그래서 두 경우 모두 짧은 간격을
+                // 두고 몇 번 더 읽어봅니다.
+                let schedules = [];
+                const maxAttempts = 4;
+                for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                    let value;
+                    try {
+                        value = await bleScheduleChar.readValue();
+                    } catch (readErr) {
+                        schedDebugLog(`시도 ${attempt}: 읽기 자체 실패 - ${readErr.message}`);
+                        if (attempt === maxAttempts) throw readErr;
+                        await new Promise(r => setTimeout(r, 500));
+                        continue;
+                    }
+                    const bytesForLog = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+                    const hexPreview = Array.from(bytesForLog).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                    schedDebugLog(`시도 ${attempt}: ${value.byteLength}바이트 수신 = [${hexPreview}]`);
+                    const result = parseSchedulePacket(value);
+                    schedules = result.schedules;
+                    schedDebugLog(`파싱 결과: 스케줄 ${schedules.length}개, truncated=${result.truncated}, 상세=${JSON.stringify(schedules.map(s => ({ dayMask: s.dayMask, stepCount: s.steps.length })))}`);
+                    if (!result.truncated || attempt === maxAttempts) break;
+                    schedDebugLog(`잘린 것으로 보임 - 재시도 ${attempt}/${maxAttempts - 1}`);
+                    await new Promise(r => setTimeout(r, 400));
+                }
+                renderSchedulesFromParsed(schedules);
+                if (schedules.length > 0) {
+                    showToast('제어기에 저장된 스케줄을 불러왔습니다.', 'success');
+                }
+            } catch (err) {
+                console.error('스케줄 읽기 실패:', err);
+                schedDebugLog(`최종 실패: ${err.message}`);
+                showToast('제어기의 스케줄 정보를 불러오지 못했습니다: ' + err.message, 'error');
+            }
+        }
+
+
+        async function sendSchedulesToController() {
+            if (!isConnected || !bleScheduleChar) {
+                showToast('먼저 제어기에 연결해주세요.', 'error');
+                return;
+            }
+            if (!deviceHasSchedule) {
+                showToast('이 제어기는 일반형(스케줄 미지원) 기기입니다.', 'error');
+                return;
+            }
+            const schedule1 = document.getElementById('schedule-1');
+            if (!scheduleHasSelectedDay(schedule1)) {
+                showToast('스케줄 1은 요일을 최소 1개 선택해야 전송할 수 있습니다.', 'error');
+                return;
+            }
+            try {
+                const packet = buildSchedulePacket();
+                // BLE 특성 쓰기는 보통 20바이트 내외로 제한되므로, 실제 구현 시
+                // MTU 협상 또는 청크 분할 전송 로직이 필요할 수 있습니다. (TODO)
+                await bleScheduleChar.writeValue(packet);
+                showToast('설정값이 제어기로 전송되었습니다.', 'success');
+                markScheduleSynced();
+            } catch (err) {
+                console.error(err);
+                showToast('전송 실패: ' + err.message, 'error');
+            }
+        }
+
+        // 페이지 로드 시 위치 정보 획득 및 전체 화면 일출/일몰 계산 갱신
+        // 헤더의 큰 시각(초 단위)과 작은 날짜 표시 갱신
+        function updateHeaderClock() {
+            const now = new Date();
+            const pad = n => String(n).padStart(2, '0');
+            document.getElementById('headerClock').textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+            const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+            document.getElementById('headerDate').textContent = `${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 (${weekdays[now.getDay()]})`;
+        }
+
+        // 앱(탭)이 닫히거나 백그라운드로 완전히 내려갈 때, 제어기와의 BLE 연결을
+        // 명시적으로 끊어준다. 그냥 두면 브라우저/OS가 자체 타임아웃(수십 초 이상)이
+        // 지나서야 연결을 정리하기 때문에, 그 사이 제어기는 여전히 "연결됨" 상태로
+        // 남아 다른 기기의 접속을 막을 수 있다.
+        function disconnectBleForUnload() {
+            if (bleDevice && bleDevice.gatt && bleDevice.gatt.connected) {
+                bleDevice.gatt.disconnect();
+            }
+        }
+        window.addEventListener('pagehide', disconnectBleForUnload);
+        window.addEventListener('beforeunload', disconnectBleForUnload);
+
+        window.onload = function() {
+            setConnectionUI('disconnected');
+            updateAddScheduleButtonState();
+            validateSendButtonState();
+            checkAllOverlaps();
+            updateHeaderClock();
+            setInterval(updateHeaderClock, 1000);
+            updateScheduleMenuAvailability(); // 연결 전에는 스케줄 관련 메뉴 비활성 상태로 시작
+            initFxConsole(); // 메인 화면의 LED 연출 프리뷰 시작
+
+            if (!navigator.bluetooth) {
+                showToast('이 브라우저는 Web Bluetooth를 지원하지 않습니다. Chrome/Edge 최신 버전을 사용해주세요.', 'error');
+            }
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        currentLat = position.coords.latitude;
+                        currentLng = position.coords.longitude;
+                        document.getElementById('locationLabel').textContent = `📍 위도: ${currentLat.toFixed(2)}, 경도: ${currentLng.toFixed(2)}`;
+                        refreshAllSolarTimes();
+                        checkAllOverlaps();
+                        updateLocationNameFromCoords(currentLat, currentLng);
+                        if (isConnected) sendLocationToController(); // 연결 중 위치가 갱신되면 제어기에도 반영
+                    },
+                    (error) => {
+                        console.warn('Geolocation error:', error.code, error.message, '| isSecureContext:', window.isSecureContext);
+                        let reasonText = '위치 권한 거부';
+                        if (error.code === error.POSITION_UNAVAILABLE) reasonText = '위치 확인 불가';
+                        else if (error.code === error.TIMEOUT) reasonText = '위치 확인 시간 초과';
+                        document.getElementById('locationLabel').textContent = `📍 ${reasonText} (서울 기준 적용)`;
+                        if (!window.isSecureContext) {
+                            showToast('이 파일을 file://로 직접 열면 브라우저가 위치 권한을 자동 차단합니다. https:// 또는 localhost로 열어야 위치 권한 창이 뜹니다.', 'error');
+                        }
+                        refreshAllSolarTimes();
+                        checkAllOverlaps();
+                    },
+                    { enableHighAccuracy: false, timeout: 8000, maximumAge: 0 }
+                );
+            } else {
+                refreshAllSolarTimes();
+            }
+        };
+
+        // 천문학 알고리즘 기반 일출·일몰 시각 계산 함수 (분 단위로 반환)
+        function calculateSunTimes(lat, lng, date = new Date()) {
+            const N = Math.floor((date - new Date(date.getFullYear(), 0, 0)) / (1000 * 60 * 60 * 24));
+            const lngHour = lng / 15;
+            
+            // 일출/일몰 근사 시간 (지점)
+            const tSunrise = N + ((6 - lngHour) / 24);
+            const tSunset = N + ((18 - lngHour) / 24);
+
+            function calcTime(t, isSunrise) {
+                const M = (0.9856 * t) - 3.289;
+                let L = M + (1.916 * Math.sin(M * Math.PI / 180)) + (0.020 * Math.sin(2 * M * Math.PI / 180)) + 282.634;
+                L = (L + 360) % 360;
+
+                let RA = Math.atan(0.91764 * Math.tan(L * Math.PI / 180)) * 180 / Math.PI;
+                RA = (RA + 360) % 360;
+
+                const Lquadrant = Math.floor(L / 90) * 90;
+                const RAquadrant = Math.floor(RA / 90) * 90;
+                RA = RA + (Lquadrant - RAquadrant);
+                RA = RA / 15;
+
+                const sinDec = 0.39782 * Math.sin(L * Math.PI / 180);
+                const cosDec = Math.cos(Math.asin(sinDec));
+
+                const cosH = (Math.cos(90.833 * Math.PI / 180) - (sinDec * Math.sin(lat * Math.PI / 180))) / (cosDec * Math.cos(lat * Math.PI / 180));
+                
+                if (cosH > 1 || cosH < -1) return null; // 극야/백야 예외
+
+                const H = isSunrise ? (360 - (Math.acos(cosH) * 180 / Math.PI)) / 15 : (Math.acos(cosH) * 180 / Math.PI) / 15;
+                const T = H + RA - (0.06571 * t) - 6.622;
+                let UT = T - lngHour;
+                UT = (UT + 24) % 24;
+
+                // 해외 사용 지원: 특정 시간대로 고정하지 않고, 모바일 기기의
+                // 로컬 시간대(위치 기반)를 그대로 적용한다.
+                const tzOffsetHours = -(date.getTimezoneOffset() / 60); // UTC 기준 로컬 시간대 오프셋(시간)
+                let localT = UT + tzOffsetHours;
+                localT = (localT + 24) % 24;
+
+                const hour = Math.floor(localT);
+                const minute = Math.round((localT - hour) * 60);
+                return { hour, minute, totalMin: hour * 60 + minute };
+            }
+
+            const sunrise = calcTime(tSunrise, true) || { hour: 6, minute: 0, totalMin: 360 };
+            const sunset = calcTime(tSunset, false) || { hour: 19, minute: 0, totalMin: 1140 };
+
+            return {
+                sunrise: { text: `${String(sunrise.hour).padStart(2, '0')}:${String(sunrise.minute).padStart(2, '0')}`, totalMin: sunrise.totalMin },
+                sunset: { text: `${String(sunset.hour).padStart(2, '0')}:${String(sunset.minute).padStart(2, '0')}`, totalMin: sunset.totalMin }
+            };
+        }
+
+        // 전체 화면의 일출/일몰 연동 블록 갱신
+        function refreshAllSolarTimes() {
+            updateHeaderSunInfo();
+            const blocks = document.querySelectorAll('.time-block');
+            blocks.forEach(block => {
+                const mode = block.getAttribute('data-mode');
+                if (mode === 'sunrise' || mode === 'sunset') {
+                    updateSolarDisplay(block);
+                }
+            });
+        }
+
+        // 헤더에 위치 기반(당일) 일출/일몰 시각 표시
+        function updateHeaderSunInfo() {
+            const sunTimes = calculateSunTimes(currentLat, currentLng);
+            const el = document.getElementById('headerSunInfo');
+            el.textContent = `🌅 일출 ${sunTimes.sunrise.text}　🌇 일몰 ${sunTimes.sunset.text}`;
+            el.classList.add('show');
+        }
+
+        // 위도/경도를 실제 지역명(예: "서울특별시 강남구")으로 변환해 위치 라벨에 표시.
+        // TODO: 현재는 OpenStreetMap Nominatim의 무료 reverse geocoding API를 사용한 임시 구현입니다.
+        // 실서비스 배포 시에는 호출량 제한/이용 정책 문제로 Kakao/Naver 지도 API 등
+        // 정식 API 키 기반 서비스로 교체하고, 가능하면 서버를 경유하는 프록시 호출을 권장합니다.
+        async function updateLocationNameFromCoords(lat, lng) {
+            const label = document.getElementById('locationLabel');
+            try {
+                const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=10&accept-language=ko`;
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(`geocode http ${res.status}`);
+                const data = await res.json();
+                const addr = data.address || {};
+                const region = addr.state || addr.province || '';
+                const city = addr.city || addr.town || addr.county || addr.city_district || addr.borough || addr.village || '';
+                let name = [region, city].filter(Boolean).join(' ');
+                if (!name && data.display_name) {
+                    name = data.display_name.split(',').slice(0, 2).join(',').trim();
+                }
+                if (name) {
+                    label.textContent = `📍 ${name}`;
+                }
+                // 실패하거나 이름을 찾지 못하면 기존 좌표 표시를 그대로 유지한다.
+            } catch (err) {
+                console.error('위치 지역명 조회 실패:', err);
+                // 네트워크 오류 등으로 지역명 조회에 실패해도, 이미 표시된 좌표 정보와
+                // 그 좌표로 계산된 일출/일몰 시각은 그대로 유효하므로 별도 처리 없이 넘어간다.
+            }
+        }
+
+        function toggleDay(btn) {
+            btn.classList.toggle('selected');
+            updateAddScheduleButtonState();
+            validateSendButtonState();
+        }
+
+        // 보상 시각 계산 및 UI 갱신
+        function updateSolarDisplay(timeBlock) {
+            const mode = timeBlock.getAttribute('data-mode');
+            const sign = timeBlock.getAttribute('data-offset-sign');
+            const min = parseInt(timeBlock.getAttribute('data-offset-min')) || 0;
+
+            const sunTimes = calculateSunTimes(currentLat, currentLng);
+            const base = mode === 'sunrise' ?
+                { text: sunTimes.sunrise.text, totalMin: sunTimes.sunrise.totalMin, label: '일출' } :
+                { text: sunTimes.sunset.text, totalMin: sunTimes.sunset.totalMin, label: '일몰' };
+
+            let finalTotalMin = sign === '+' ? base.totalMin + min : base.totalMin - min;
+            if (finalTotalMin < 0) finalTotalMin += 1440;
+            if (finalTotalMin >= 1440) finalTotalMin %= 1440;
+
+            const finalH = Math.floor(finalTotalMin / 60);
+            const finalM = finalTotalMin % 60;
+            const finalStr = `${String(finalH).padStart(2, '0')}:${String(finalM).padStart(2, '0')}`;
+
+            const baseInfoEl = timeBlock.querySelector('.solar-base-info');
+            const finalInfoEl = timeBlock.querySelector('.solar-final-info');
+
+            baseInfoEl.textContent = `${base.label} 기준 (${sign}${min}분)`;
+            finalInfoEl.textContent = finalStr;
+        }
+
+        function getScheduleNumFromElement(el) {
+            const card = el.closest('.schedule-card');
+            return card ? card.id.replace('schedule-', '') : null;
+        }
+
+        function changeTimeMode(selectEl) {
+            const timeBlock = selectEl.closest('.time-block');
+            const manualWrap = timeBlock.querySelector('.time-inputs-wrap');
+            const solarWrap = timeBlock.querySelector('.solar-offset-wrap');
+
+            const mode = selectEl.value;
+            timeBlock.setAttribute('data-mode', mode);
+
+            if (mode === 'manual') {
+                manualWrap.style.display = 'flex';
+                solarWrap.style.display = 'none';
+            } else {
+                manualWrap.style.display = 'none';
+                solarWrap.style.display = 'flex';
+                updateSolarDisplay(timeBlock);
+            }
+            checkStepOverlap(getScheduleNumFromElement(timeBlock));
+            validateSendButtonState();
+        }
+
+        // 직접 입력 모달 제어
+        function openTimeModal(wrapEl) {
+            activeTimeDisplayEl = wrapEl.querySelector('.time-display-text');
+            const parts = activeTimeDisplayEl.textContent.trim().split(':');
+            document.getElementById('modalHourInput').value = parts[0].trim();
+            document.getElementById('modalMinuteInput').value = parts[1].trim();
+
+            const badgeText = wrapEl.closest('.time-block').querySelector('.row-badge').textContent;
+            document.getElementById('timeModalTitle').textContent = `${badgeText} 시간 설정`;
+            document.getElementById('timeModalOverlay').style.display = 'flex';
+        }
+
+        function closeTimeModal(isConfirm) {
+            if (isConfirm && activeTimeDisplayEl) {
+                let h = parseInt(document.getElementById('modalHourInput').value) || 0;
+                let m = parseInt(document.getElementById('modalMinuteInput').value) || 0;
+                if (h < 0) h = 0; if (h > 23) h = 23;
+                if (m < 0) m = 0; if (m > 59) m = 59;
+                activeTimeDisplayEl.textContent = `${String(h).padStart(2, '0')} : ${String(m).padStart(2, '0')}`;
+                checkStepOverlap(getScheduleNumFromElement(activeTimeDisplayEl));
+                validateSendButtonState();
+            }
+            document.getElementById('timeModalOverlay').style.display = 'none';
+            activeTimeDisplayEl = null;
+        }
+
+        function adjustTime(type, amount) {
+            const input = document.getElementById(type === 'hour' ? 'modalHourInput' : 'modalMinuteInput');
+            let limit = type === 'hour' ? 23 : 59;
+            let val = (parseInt(input.value) || 0) + amount;
+            if (val > limit) val = 0;
+            if (val < 0) val = limit;
+            input.value = String(val).padStart(2, '0');
+        }
+
+        // 오프셋 보상 모달 제어
+        function openOffsetModal(wrapEl) {
+            activeTimeBlockEl = wrapEl.closest('.time-block');
+            currentOffsetSign = activeTimeBlockEl.getAttribute('data-offset-sign') || '+';
+            const currentMin = activeTimeBlockEl.getAttribute('data-offset-min') || '30';
+
+            document.getElementById('modalOffsetInput').value = currentMin;
+            updateSignButtonUI();
+
+            const mode = activeTimeBlockEl.getAttribute('data-mode');
+            const sunTimes = calculateSunTimes(currentLat, currentLng);
+            const baseText = mode === 'sunrise' ? `일출 (${sunTimes.sunrise.text})` : `일몰 (${sunTimes.sunset.text})`;
+            const badgeText = activeTimeBlockEl.querySelector('.row-badge').textContent;
+
+            document.getElementById('offsetModalTitle').textContent = `${badgeText} (${baseText}) 보상 설정`;
+            document.getElementById('offsetModalOverlay').style.display = 'flex';
+        }
+
+        function setOffsetSign(sign) {
+            currentOffsetSign = sign;
+            updateSignButtonUI();
+        }
+
+        function updateSignButtonUI() {
+            document.getElementById('btnSignMinus').classList.toggle('selected', currentOffsetSign === '-');
+            document.getElementById('btnSignPlus').classList.toggle('selected', currentOffsetSign === '+');
+        }
+
+        function adjustOffsetMinute(amount) {
+            const input = document.getElementById('modalOffsetInput');
+            let val = (parseInt(input.value) || 0) + amount;
+            if (val > 300) val = 300;
+            if (val < 0) val = 0;
+            input.value = val;
+        }
+
+        function closeOffsetModal(isConfirm) {
+            if (isConfirm && activeTimeBlockEl) {
+                let min = parseInt(document.getElementById('modalOffsetInput').value) || 0;
+                activeTimeBlockEl.setAttribute('data-offset-sign', currentOffsetSign);
+                activeTimeBlockEl.setAttribute('data-offset-min', min);
+                updateSolarDisplay(activeTimeBlockEl);
+                checkStepOverlap(getScheduleNumFromElement(activeTimeBlockEl));
+                validateSendButtonState();
+            }
+            document.getElementById('offsetModalOverlay').style.display = 'none';
+            activeTimeBlockEl = null;
+        }
+
+        // 스케줄 추가 및 스텝 추가 기능
+        function addSchedule() {
+            const container = document.getElementById('scheduleListContainer');
+            const currentCount = container.getElementsByClassName('schedule-card').length;
+            if (currentCount >= 7) {
+                showToast('스케줄 박스는 최대 7개까지만 추가할 수 있습니다.', 'error');
+                return;
+            }
+            if (currentCount > 0) {
+                const lastCard = container.getElementsByClassName('schedule-card')[currentCount - 1];
+                if (!scheduleHasSelectedDay(lastCard)) {
+                    showToast('마지막 스케줄에 요일을 먼저 선택해주세요.', 'error');
+                    return;
+                }
+            }
+            const nextNum = currentCount + 1;
+            const newCard = document.createElement('div');
+            newCard.className = 'schedule-card';
+            newCard.id = `schedule-${nextNum}`;
+            newCard.innerHTML = `
+                <div class="schedule-card-header">
+                    <span class="schedule-title-wrap">
+                        <span class="schedule-dot"></span>
+                        <span class="schedule-title">스케줄 #${nextNum}</span>
+                    </span>
+                    <button class="schedule-delete-btn" onclick="removeSchedule(${nextNum})">스케줄 삭제</button>
+                </div>
+                <div class="days-row">
+                    <button class="day-btn" onclick="toggleDay(this)">월</button>
+                    <button class="day-btn" onclick="toggleDay(this)">화</button>
+                    <button class="day-btn" onclick="toggleDay(this)">수</button>
+                    <button class="day-btn" onclick="toggleDay(this)">목</button>
+                    <button class="day-btn" onclick="toggleDay(this)">금</button>
+                    <button class="day-btn" onclick="toggleDay(this)">토</button>
+                    <button class="day-btn" onclick="toggleDay(this)">일</button>
+                </div>
+                <div class="steps-container" id="steps-container-${nextNum}">
+                    <div class="step-row" id="s${nextNum}-step-1">
+                        <div class="step-header">
+                            <div class="step-header-top">
+                                <span class="step-label">STEP 1</span>
+                                <div class="step-header-actions">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="time-setting-group">
+                            <div class="time-block" data-mode="sunrise" data-offset-sign="+" data-offset-min="0">
+                                <span class="row-badge">ON</span>
+                                <select class="mode-select" onchange="changeTimeMode(this)">
+                                    <option value="manual">직접 지정</option>
+                                    <option value="sunrise" selected>일출 연동</option>
+                                    <option value="sunset">일몰 연동</option>
+                                </select>
+                                <div class="time-inputs-wrap" style="display: none;" onclick="openTimeModal(this)">
+                                    <span class="time-display-text">06 : 00</span>
+                                </div>
+                                <div class="solar-offset-wrap" style="display: flex;" onclick="openOffsetModal(this)">
+                                    <span class="solar-base-info">계산 중...</span>
+                                    <span class="solar-final-info">--:--</span>
+                                </div>
+                            </div>
+                            <div class="time-block" data-mode="sunset" data-offset-sign="+" data-offset-min="0">
+                                <span class="row-badge">OFF</span>
+                                <select class="mode-select" onchange="changeTimeMode(this)">
+                                    <option value="manual">직접 지정</option>
+                                    <option value="sunrise">일출 연동</option>
+                                    <option value="sunset" selected>일몰 연동</option>
+                                </select>
+                                <div class="time-inputs-wrap" style="display: none;" onclick="openTimeModal(this)">
+                                    <span class="time-display-text">18 : 00</span>
+                                </div>
+                                <div class="solar-offset-wrap" style="display: flex;" onclick="openOffsetModal(this)">
+                                    <span class="solar-base-info">계산 중...</span>
+                                    <span class="solar-final-info">--:--</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="warning-text" id="warn-s${nextNum}-step-1"></div>
+                    </div>
+                </div>
+                <button class="add-step-btn" onclick="addStep(${nextNum})">+ 스텝 추가 (최대 5개)</button>
+            `;
+            container.appendChild(newCard);
+            updateLimitInfo();
+            refreshAllSolarTimes();
+            updateAddScheduleButtonState();
+            validateSendButtonState();
+            checkStepOverlap(nextNum);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function removeSchedule(num) {
+            const card = document.getElementById(`schedule-${num}`);
+            if (card) {
+                card.remove();
+                reorderSchedules();
+            }
+        }
+
+        function reorderSchedules() {
+            const container = document.getElementById('scheduleListContainer');
+            const cards = container.getElementsByClassName('schedule-card');
+            for (let i = 0; i < cards.length; i++) {
+                const newNum = i + 1;
+                cards[i].id = `schedule-${newNum}`;
+                cards[i].querySelector('.schedule-title').textContent = `스케줄 #${newNum}`;
+                const header = cards[i].querySelector('.schedule-card-header');
+                let deleteBtn = header.querySelector('.schedule-delete-btn');
+                if (newNum > 1 && !deleteBtn) {
+                    deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'schedule-delete-btn';
+                    deleteBtn.textContent = '스케줄 삭제';
+                    deleteBtn.onclick = function() { removeSchedule(newNum); };
+                    header.appendChild(deleteBtn);
+                } else if (newNum === 1 && deleteBtn) {
+                    deleteBtn.remove();
+                } else if (deleteBtn) {
+                    deleteBtn.onclick = function() { removeSchedule(newNum); };
+                }
+                cards[i].querySelector('.steps-container').id = `steps-container-${newNum}`;
+                cards[i].querySelector('.add-step-btn').setAttribute('onclick', `addStep(${newNum})`);
+
+                // 스케줄 번호가 바뀌었으므로 각 STEP의 설정/삭제 버튼 핸들러도 재연결
+                const steps = cards[i].querySelectorAll('.step-row');
+                steps.forEach((step, sIdx) => {
+                    const stepNum = sIdx + 1;
+                    step.id = `s${newNum}-step-${stepNum}`;
+                    const stepDeleteBtn = step.querySelector('.step-delete');
+                    if (stepDeleteBtn) stepDeleteBtn.onclick = function() { removeStep(newNum, stepNum); };
+                    const warnEl = step.querySelector('.warning-text');
+                    if (warnEl) warnEl.id = `warn-s${newNum}-step-${stepNum}`;
+                });
+            }
+            updateLimitInfo();
+            updateAddScheduleButtonState();
+            validateSendButtonState();
+        }
+
+        function updateLimitInfo() {
+            const count = document.getElementById('scheduleListContainer').getElementsByClassName('schedule-card').length;
+            document.getElementById('limitInfo').textContent = `스케줄 박스는 최대 7개까지 등록 가능합니다. (현재 ${count} / 7개)`;
+        }
+
+        function addStep(schNum) {
+            const stepsContainer = document.getElementById(`steps-container-${schNum}`);
+            if (stepsContainer.children.length >= 48) {
+                showToast('타임스텝은 최대 48개까지만 추가할 수 있습니다.', 'error');
+                return;
+            }
+            const nextStepNum = stepsContainer.children.length + 1;
+            const newStep = document.createElement('div');
+            newStep.className = 'step-row';
+            newStep.id = `s${schNum}-step-${nextStepNum}`;
+            newStep.innerHTML = `
+                <div class="step-header">
+                    <div class="step-header-top">
+                        <span class="step-label">STEP ${nextStepNum}</span>
+                        <div class="step-header-actions">
+                            <button class="step-delete" onclick="removeStep(${schNum}, ${nextStepNum})">삭제</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="time-setting-group">
+                    <div class="time-block" data-mode="sunrise" data-offset-sign="+" data-offset-min="0">
+                        <span class="row-badge">ON</span>
+                        <select class="mode-select" onchange="changeTimeMode(this)">
+                            <option value="manual">직접 지정</option>
+                            <option value="sunrise" selected>일출 연동</option>
+                            <option value="sunset">일몰 연동</option>
+                        </select>
+                        <div class="time-inputs-wrap" style="display: none;" onclick="openTimeModal(this)">
+                            <span class="time-display-text">06 : 00</span>
+                        </div>
+                        <div class="solar-offset-wrap" style="display: flex;" onclick="openOffsetModal(this)">
+                            <span class="solar-base-info">계산 중...</span>
+                            <span class="solar-final-info">--:--</span>
+                        </div>
+                    </div>
+                    <div class="time-block" data-mode="sunset" data-offset-sign="+" data-offset-min="0">
+                        <span class="row-badge">OFF</span>
+                        <select class="mode-select" onchange="changeTimeMode(this)">
+                            <option value="manual">직접 지정</option>
+                            <option value="sunrise">일출 연동</option>
+                            <option value="sunset" selected>일몰 연동</option>
+                        </select>
+                        <div class="time-inputs-wrap" style="display: none;" onclick="openTimeModal(this)">
+                            <span class="time-display-text">18 : 00</span>
+                        </div>
+                        <div class="solar-offset-wrap" style="display: flex;" onclick="openOffsetModal(this)">
+                            <span class="solar-base-info">계산 중...</span>
+                            <span class="solar-final-info">--:--</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="warning-text" id="warn-s${schNum}-step-${nextStepNum}"></div>
+            `;
+            stepsContainer.appendChild(newStep);
+            refreshAllSolarTimes();
+            checkStepOverlap(schNum);
+            stepsContainer.scrollTop = stepsContainer.scrollHeight;
+            validateSendButtonState();
+        }
+
+        function removeStep(schNum, stepNum) {
+            const stepEl = document.getElementById(`s${schNum}-step-${stepNum}`);
+            if (stepEl) {
+                stepEl.remove();
+                reorderSteps(schNum);
+                checkStepOverlap(schNum);
+                validateSendButtonState();
+            }
+        }
+
+        function reorderSteps(schNum) {
+            const steps = document.getElementById(`steps-container-${schNum}`).getElementsByClassName('step-row');
+            for (let i = 0; i < steps.length; i++) {
+                const newNum = i + 1;
+                steps[i].id = `s${schNum}-step-${newNum}`;
+                steps[i].querySelector('.step-label').textContent = `STEP ${newNum}`;
+                steps[i].querySelector('.warning-text').id = `warn-s${schNum}-step-${newNum}`;
+                const header = steps[i].querySelector('.step-header');
+                const actions = header.querySelector('.step-header-actions');
+                let deleteBtn = actions.querySelector('.step-delete');
+                if (newNum > 1 && !deleteBtn) {
+                    deleteBtn = document.createElement('button');
+                    deleteBtn.className = 'step-delete';
+                    deleteBtn.textContent = '삭제';
+                    deleteBtn.onclick = function() { removeStep(schNum, newNum); };
+                    actions.appendChild(deleteBtn);
+                } else if (newNum === 1 && deleteBtn) {
+                    deleteBtn.remove();
+                } else if (deleteBtn) {
+                    deleteBtn.onclick = function() { removeStep(schNum, newNum); };
+                }
+            }
+        }
+
+        // ========================================================================
+        // 설정 메뉴
+        // ========================================================================
+        const APP_VERSION = 'v1.0.0';
+        const LS_KEY_PASSWORD = 'lm_device_password';
+        const LS_KEY_YEARLY_PERIODS = 'lm_yearly_periods';
+        const LS_KEY_STOP_DAYS = 'lm_stop_days';
+
+        function openSettingsModal() {
+            document.getElementById('settingsModalOverlay').style.display = 'flex';
+        }
+
+        function closeSettingsModal() {
+            document.getElementById('settingsModalOverlay').style.display = 'none';
+        }
+
+        function openSettingsItem(key) {
+            closeSettingsModal();
+            if (key === 'reset') openResetConfirmModal();
+            else if (key === 'password') openPasswordChangeModal();
+            else if (key === 'schedule') openScheduleModal();
+            else if (key === 'yearly') openYearlyScheduleModal();
+            else if (key === 'holiday') openStopDaysModal();
+            else if (key === 'history') openHistoryModal();
+            else if (key === 'deviceinfo') openDeviceInfoModal();
+            else if (key === 'devicename') openDeviceNameModal();
+        }
+
+        // 연결된 제어기의 등급(캐패빌리티)에 따라 스케줄 관련 설정 메뉴를 켜고 끈다.
+        // 연결 전이나 일반형(스케줄 미지원) 기기에 연결된 동안은 항상 비활성 상태.
+        function updateScheduleMenuAvailability() {
+            document.querySelectorAll('.requires-schedule').forEach(el => {
+                el.disabled = !deviceHasSchedule;
+            });
+            const rtcBar = document.querySelector('.rtc-bar');
+            if (rtcBar) rtcBar.style.display = deviceHasSchedule ? 'flex' : 'none';
+        }
+
+        // ---- 1. 스케줄 초기화 ----
+        function openResetConfirmModal() {
+            document.getElementById('resetConfirmModalOverlay').style.display = 'flex';
+        }
+        function closeResetConfirmModal() {
+            document.getElementById('resetConfirmModalOverlay').style.display = 'none';
+        }
+        async function confirmResetSchedules() {
+            applyDefaultScheduleToDom();
+            closeResetConfirmModal();
+            closeSettingsModal();
+
+            if (isConnected && bleScheduleChar) {
+                // 확인 즉시 제어기로도 전송해서 바로 반영한다.
+                await sendSchedulesToController();
+            } else {
+                validateSendButtonState();
+                showToast('스케줄이 초기화되었습니다. 제어기에 연결되어 있지 않아 앱 화면에만 반영됐습니다 - 연결 후 다시 전송해주세요.', 'error');
+            }
+        }
+
+        // ---- 2. 비밀번호 설정 ----
+        function getStoredPassword() {
+            return localStorage.getItem(LS_KEY_PASSWORD) || '0000';
+        }
+        function setStoredPassword(pw) {
+            localStorage.setItem(LS_KEY_PASSWORD, pw);
+        }
+
+        // 2-a. BLE 접속 시 비밀번호 승인 (PIN 패드)
+        let pwPromptValue = '';
+        let pwPromptResolve = null;
+
+        function requestPasswordApproval() {
+            return new Promise((resolve) => {
+                pwPromptValue = '';
+                updatePwPromptDots();
+                document.getElementById('pwPromptError').textContent = '';
+                document.getElementById('passwordPromptModalOverlay').style.display = 'flex';
+                pwPromptResolve = resolve;
+            });
+        }
+        function updatePwPromptDots() {
+            const dots = document.querySelectorAll('#pwPromptDots .pw-dot');
+            dots.forEach((dot, i) => dot.classList.toggle('filled', i < pwPromptValue.length));
+        }
+        function pwPromptInput(digit) {
+            if (pwPromptValue.length >= 4) return;
+            pwPromptValue += digit;
+            updatePwPromptDots();
+            if (pwPromptValue.length === 4) {
+                setTimeout(() => verifyPasswordPrompt(), 150);
+            }
+        }
+        function pwPromptBackspace() {
+            pwPromptValue = pwPromptValue.slice(0, -1);
+            updatePwPromptDots();
+        }
+        function pwPromptClear() {
+            pwPromptValue = '';
+            updatePwPromptDots();
+            document.getElementById('pwPromptError').textContent = '';
+        }
+        function verifyPasswordPrompt() {
+            if (pwPromptValue === getStoredPassword()) {
+                document.getElementById('passwordPromptModalOverlay').style.display = 'none';
+                if (pwPromptResolve) pwPromptResolve(true);
+                pwPromptResolve = null;
+            } else {
+                document.getElementById('pwPromptError').textContent = '비밀번호가 일치하지 않습니다.';
+                pwPromptValue = '';
+                updatePwPromptDots();
+            }
+        }
+        function cancelPasswordPrompt() {
+            document.getElementById('passwordPromptModalOverlay').style.display = 'none';
+            if (pwPromptResolve) pwPromptResolve(false);
+            pwPromptResolve = null;
+        }
+
+        // 2-b. 비밀번호 변경 (설정 메뉴에서)
+        function openPasswordChangeModal() {
+            document.getElementById('pwChangeCurrent').value = '';
+            document.getElementById('pwChangeNew1').value = '';
+            document.getElementById('pwChangeNew2').value = '';
+            document.getElementById('pwChangeError').textContent = '';
+            document.getElementById('passwordChangeModalOverlay').style.display = 'flex';
+        }
+        function closePasswordChangeModal() {
+            document.getElementById('passwordChangeModalOverlay').style.display = 'none';
+        }
+        async function submitPasswordChange() {
+            const current = document.getElementById('pwChangeCurrent').value.trim();
+            const new1 = document.getElementById('pwChangeNew1').value.trim();
+            const new2 = document.getElementById('pwChangeNew2').value.trim();
+            const errEl = document.getElementById('pwChangeError');
+            const isFourDigits = v => /^[0-9]{4}$/.test(v);
+
+            if (!isFourDigits(current) || !isFourDigits(new1) || !isFourDigits(new2)) {
+                errEl.textContent = '비밀번호는 숫자 4자리로 입력해주세요.';
+                return;
+            }
+            if (current !== getStoredPassword()) {
+                errEl.textContent = '현재 비밀번호가 일치하지 않습니다.';
+                return;
+            }
+            if (new1 !== new2) {
+                errEl.textContent = '새 비밀번호가 서로 일치하지 않습니다.';
+                return;
+            }
+
+            // 연결된 상태라면, 제어기 쪽 PIN도 함께 바꿔야 다음 연결부터 인증이 계속 성립한다.
+            // (제어기는 8바이트 write = 기존PIN(4B)+신규PIN(4B) 를 PIN 변경 요청으로 처리)
+            if (isConnected && blePinChar) {
+                try {
+                    const bytes = Uint8Array.from(current + new1, ch => ch.charCodeAt(0) - 48);
+                    await blePinChar.writeValue(bytes);
+                } catch (err) {
+                    console.error('제어기 PIN 변경 전송 실패:', err);
+                    errEl.textContent = '제어기로 PIN 변경 전송에 실패했습니다: ' + err.message;
+                    return;
+                }
+            }
+
+            setStoredPassword(new1);
+            closePasswordChangeModal();
+            showToast('비밀번호가 변경되었습니다.', 'success');
+        }
+
+        // ---- 3. 년간 스케줄 설정 (사용중지 기간, 최대 10개) ----
+        function getYearlyPeriods() {
+            try { return JSON.parse(localStorage.getItem(LS_KEY_YEARLY_PERIODS)) || []; }
+            catch (e) { return []; }
+        }
+        function saveYearlyPeriods(list) {
+            localStorage.setItem(LS_KEY_YEARLY_PERIODS, JSON.stringify(list));
+        }
+        function openYearlyScheduleModal() {
+            document.getElementById('yearlyStartInput').value = '';
+            document.getElementById('yearlyEndInput').value = '';
+            renderYearlyPeriodList();
+            document.getElementById('yearlyScheduleModalOverlay').style.display = 'flex';
+        }
+        function closeYearlyScheduleModal() {
+            document.getElementById('yearlyScheduleModalOverlay').style.display = 'none';
+        }
+        function renderYearlyPeriodList() {
+            const list = getYearlyPeriods();
+            const listEl = document.getElementById('yearlyPeriodList');
+            const addBtn = document.getElementById('btnAddYearlyPeriod');
+            document.getElementById('yearlyLimitNote').textContent = `최대 10개까지 등록할 수 있습니다. (현재 ${list.length} / 10개)`;
+            addBtn.disabled = list.length >= 10;
+            if (list.length === 0) {
+                listEl.innerHTML = '<div class="list-empty">등록된 사용중지 기간이 없습니다.</div>';
+                return;
+            }
+            listEl.innerHTML = list.map(p => `
+                <div class="list-row">
+                    <span class="list-row-text">${p.start} ~ ${p.end}</span>
+                    <button class="list-row-delete" onclick="removeYearlyPeriod(${p.id})">삭제</button>
+                </div>
+            `).join('');
+        }
+        function addYearlyPeriod() {
+            const start = document.getElementById('yearlyStartInput').value;
+            const end = document.getElementById('yearlyEndInput').value;
+            if (!start || !end) {
+                showToast('시작일과 종료일을 모두 선택해주세요.', 'error');
+                return;
+            }
+            if (start > end) {
+                showToast('종료일은 시작일보다 빠를 수 없습니다.', 'error');
+                return;
+            }
+            const list = getYearlyPeriods();
+            if (list.length >= 10) {
+                showToast('사용중지 기간은 최대 10개까지 등록할 수 있습니다.', 'error');
+                return;
+            }
+            list.push({ id: Date.now(), start, end });
+            saveYearlyPeriods(list);
+            document.getElementById('yearlyStartInput').value = '';
+            document.getElementById('yearlyEndInput').value = '';
+            renderYearlyPeriodList();
+        }
+        function removeYearlyPeriod(id) {
+            const list = getYearlyPeriods().filter(p => p.id !== id);
+            saveYearlyPeriods(list);
+            renderYearlyPeriodList();
+        }
+
+        // ---- 4. 동작 정지일 지정 (최대 10개, 매년 반복 옵션) ----
+        function getStopDays() {
+            try { return JSON.parse(localStorage.getItem(LS_KEY_STOP_DAYS)) || []; }
+            catch (e) { return []; }
+        }
+        function saveStopDays(list) {
+            localStorage.setItem(LS_KEY_STOP_DAYS, JSON.stringify(list));
+        }
+        function openStopDaysModal() {
+            document.getElementById('stopDayInput').value = '';
+            document.getElementById('stopDayYearlyCheck').checked = false;
+            renderStopDayList();
+            document.getElementById('stopDaysModalOverlay').style.display = 'flex';
+        }
+        function closeStopDaysModal() {
+            document.getElementById('stopDaysModalOverlay').style.display = 'none';
+        }
+        function renderStopDayList() {
+            const list = getStopDays();
+            const listEl = document.getElementById('stopDayList');
+            const addBtn = document.getElementById('btnAddStopDay');
+            document.getElementById('stopDayLimitNote').textContent = `최대 10개까지 등록할 수 있습니다. (현재 ${list.length} / 10개)`;
+            addBtn.disabled = list.length >= 10;
+            if (list.length === 0) {
+                listEl.innerHTML = '<div class="list-empty">등록된 동작 정지일이 없습니다.</div>';
+                return;
+            }
+            listEl.innerHTML = list.map(d => `
+                <div class="list-row">
+                    <span>
+                        <span class="list-row-text">${d.date}</span>
+                        <div class="list-row-sub">${d.yearly ? '매년 반복' : '해당 연도만'}</div>
+                    </span>
+                    <button class="list-row-delete" onclick="removeStopDay(${d.id})">삭제</button>
+                </div>
+            `).join('');
+        }
+        function addStopDay() {
+            const date = document.getElementById('stopDayInput').value;
+            const yearly = document.getElementById('stopDayYearlyCheck').checked;
+            if (!date) {
+                showToast('정지할 날짜를 선택해주세요.', 'error');
+                return;
+            }
+            const list = getStopDays();
+            if (list.length >= 10) {
+                showToast('동작 정지일은 최대 10개까지 등록할 수 있습니다.', 'error');
+                return;
+            }
+            list.push({ id: Date.now(), date, yearly });
+            saveStopDays(list);
+            document.getElementById('stopDayInput').value = '';
+            document.getElementById('stopDayYearlyCheck').checked = false;
+            renderStopDayList();
+        }
+        function removeStopDay(id) {
+            const list = getStopDays().filter(d => d.id !== id);
+            saveStopDays(list);
+            renderStopDayList();
+        }
+
+        // ---- 5. 동작 이력 (최대 100개, ON/OFF 시각 + 반복모드 여부) ----
+        // TODO: 아래 UUID와 파싱 로직은 실제 제어기 프로토콜이 확정되면 교체해야 합니다.
+        // 임시 초안 레코드 포맷(6바이트/건): [ON시(1B), ON분(1B), OFF시(1B), OFF분(1B), 반복모드(1B,0/1), 예약(1B)]
+        const BLE_HISTORY_CHAR_UUID = '0000ffe4-0000-1000-8000-00805f9b34fb'; // TODO: 동작 이력 조회용 특성
+
+        function openHistoryModal() {
+            document.getElementById('historyModalOverlay').style.display = 'flex';
+        }
+        function closeHistoryModal() {
+            document.getElementById('historyModalOverlay').style.display = 'none';
+        }
+        function parseHistoryPayload(dataView) {
+            const records = [];
+            const recordSize = 6;
+            const count = Math.min(Math.floor(dataView.byteLength / recordSize), 100);
+            for (let i = 0; i < count; i++) {
+                const base = i * recordSize;
+                const onH = dataView.getUint8(base);
+                const onM = dataView.getUint8(base + 1);
+                const offH = dataView.getUint8(base + 2);
+                const offM = dataView.getUint8(base + 3);
+                const blinkMode = dataView.getUint8(base + 4) === 1;
+                records.push({ onH, onM, offH, offM, blinkMode });
+            }
+            return records;
+        }
+        async function fetchOperationHistory() {
+            const listEl = document.getElementById('historyList');
+            if (!isConnected || !bleServer) {
+                showToast('먼저 제어기에 연결해주세요.', 'error');
+                return;
+            }
+            listEl.innerHTML = '<div class="list-empty">조회 중...</div>';
+            try {
+                const service = await bleServer.getPrimaryService(BLE_SERVICE_UUID);
+                const historyChar = await service.getCharacteristic(BLE_HISTORY_CHAR_UUID);
+                const value = await historyChar.readValue();
+                const records = parseHistoryPayload(value);
+                if (records.length === 0) {
+                    listEl.innerHTML = '<div class="list-empty">기록된 이력이 없습니다.</div>';
+                    return;
+                }
+                const pad = n => String(n).padStart(2, '0');
+                listEl.innerHTML = records.map(r => `
+                    <div class="list-row">
+                        <span class="list-row-text">${pad(r.onH)}:${pad(r.onM)} → ${pad(r.offH)}:${pad(r.offM)}</span>
+                        <span class="list-row-sub">${r.blinkMode ? '반복 모드' : '일반 모드'}</span>
+                    </div>
+                `).join('');
+            } catch (err) {
+                console.error(err);
+                listEl.innerHTML = '<div class="list-empty">이력 조회에 실패했습니다.<br>(제어기 펌웨어에 이력 기능이 준비되면 정상 조회됩니다)</div>';
+            }
+        }
+
+        // ---- 6. 기기 정보 (앱 버전 + 제어기 펌웨어 버전) ----
+        // 표준 BLE Device Information Service(0x180A)를 사용합니다.
+        const DEVICE_INFO_SERVICE_UUID = 0x180A;
+        const FIRMWARE_REV_CHAR_UUID = 0x2A26;
+        const MANUFACTURER_NAME_CHAR_UUID = 0x2A29;
+
+        async function openDeviceInfoModal() {
+            document.getElementById('deviceAppVersion').textContent = APP_VERSION;
+            const fwEl = document.getElementById('deviceFwVersion');
+            const mfEl = document.getElementById('deviceManufacturer');
+            fwEl.textContent = '-';
+            mfEl.textContent = '-';
+            document.getElementById('deviceInfoModalOverlay').style.display = 'flex';
+
+            if (!isConnected || !bleServer) {
+                fwEl.textContent = '제어기 미연결';
+                mfEl.textContent = '제어기 미연결';
+                return;
+            }
+            try {
+                const infoService = await bleServer.getPrimaryService(DEVICE_INFO_SERVICE_UUID);
+                try {
+                    const fwChar = await infoService.getCharacteristic(FIRMWARE_REV_CHAR_UUID);
+                    const fwValue = await fwChar.readValue();
+                    fwEl.textContent = new TextDecoder().decode(fwValue);
+                } catch (e) {
+                    fwEl.textContent = '조회 실패';
+                }
+                try {
+                    const mfChar = await infoService.getCharacteristic(MANUFACTURER_NAME_CHAR_UUID);
+                    const mfValue = await mfChar.readValue();
+                    mfEl.textContent = new TextDecoder().decode(mfValue);
+                } catch (e) {
+                    mfEl.textContent = '조회 실패';
+                }
+            } catch (err) {
+                console.error(err);
+                fwEl.textContent = '조회 실패';
+                mfEl.textContent = '조회 실패';
+            }
+        }
+        function closeDeviceInfoModal() {
+            document.getElementById('deviceInfoModalOverlay').style.display = 'none';
+        }
+
+        // ---- 기기 이름(BLE 광고 이름) 변경 ----
+        async function openDeviceNameModal() {
+            const input = document.getElementById('deviceNameInput');
+            const errEl = document.getElementById('deviceNameError');
+            errEl.textContent = '';
+            input.value = '';
+            input.maxLength = BLE_DEVICE_NAME_MAX_SUFFIX_LEN;
+            document.getElementById('deviceNamePrefixLabel').textContent = BLE_DEVICE_NAME_PREFIX;
+            document.getElementById('deviceNamePrefixLabel2').textContent = BLE_DEVICE_NAME_PREFIX;
+            document.getElementById('deviceNameMaxLenLabel').textContent = BLE_DEVICE_NAME_MAX_SUFFIX_LEN;
+            document.getElementById('deviceNameModalOverlay').style.display = 'flex';
+
+            if (!isConnected || !bleDeviceNameChar) {
+                errEl.textContent = '제어기에 연결되어 있어야 현재 이름을 불러오고 변경할 수 있습니다.';
+                return;
+            }
+            try {
+                const value = await bleDeviceNameChar.readValue();
+                const fullName = new TextDecoder().decode(value);
+                // 고정 접두사 부분은 잘라내고 접미사만 입력창에 표시
+                input.value = fullName.startsWith(BLE_DEVICE_NAME_PREFIX)
+                    ? fullName.slice(BLE_DEVICE_NAME_PREFIX.length)
+                    : fullName;
+            } catch (err) {
+                console.error('기기 이름 읽기 실패:', err);
+                errEl.textContent = '현재 이름을 불러오지 못했습니다.';
+            }
+        }
+        function closeDeviceNameModal() {
+            document.getElementById('deviceNameModalOverlay').style.display = 'none';
+        }
+        async function submitDeviceNameChange() {
+            const input = document.getElementById('deviceNameInput');
+            const errEl = document.getElementById('deviceNameError');
+            const suffix = input.value.trim();
+
+            if (!isConnected || !bleDeviceNameChar) {
+                errEl.textContent = '먼저 제어기에 연결해주세요.';
+                return;
+            }
+            if (suffix.length < 1 || suffix.length > BLE_DEVICE_NAME_MAX_SUFFIX_LEN) {
+                errEl.textContent = `뒷부분은 1~${BLE_DEVICE_NAME_MAX_SUFFIX_LEN}자로 입력해주세요.`;
+                return;
+            }
+            try {
+                // 접미사만 전송 - 펌웨어가 고정 접두사와 합쳐서 저장/광고합니다.
+                await bleDeviceNameChar.writeValue(new TextEncoder().encode(suffix));
+                closeDeviceNameModal();
+                showToast('기기 이름이 변경되었습니다. 스캔 목록에는 재연결 후 반영될 수 있습니다.', 'success');
+            } catch (err) {
+                console.error('기기 이름 변경 실패:', err);
+                errEl.textContent = '변경 실패: ' + err.message;
+            }
+        }
+        // ========================================================================
+        // 7. LED 연출 설정 (디머/디밍/점멸/ON-OFF/싸이키)
+        // 스케줄 STEP은 "언제" 켜고 끌지만 담당하고, "어떻게" 켜질지는 여기 하나의
+        // 전역 설정으로 관리합니다. BLE 6바이트 포맷은 BLE_EFFECT_CHAR_UUID 선언부 참고.
+        // ========================================================================
+        const fxState = {
+            mode: 'dimmer',
+            dimmer: { brightness: 72 },
+            breathe: { speed: 45 },
+            blink:   { speed: 55 },          // ON시간=OFF시간, 스피드 하나로 통일
+            ontime:  { onTime: 55, offTime: 30 },
+            strobe:  { intensity: 60 }
+        };
+
+        const FX_MODE_META = {
+            dimmer: { color:'#ffb454', desc:'밝기를 한 단계로 고정합니다. 페이더를 드래그해 조절하세요.' },
+            breathe:{ color:'#ffb454', desc:'부드럽게 밝아졌다 어두워지는 동작을 반복합니다. 속도만 설정하면 됩니다.' },
+            blink:  { color:'#ffcf6b', desc:'ON 시간과 OFF 시간이 동일하게 반복되는 점멸입니다. 스피드만 설정하세요.' },
+            ontime: { color:'#ffcf6b', desc:'ON 유지시간과 OFF 유지시간을 각각 다르게 설정합니다.' },
+            strobe: { color:'#ffe28a', desc:'큰 펄스 4회 + 작은 펄스 클러스터 3회가 이어지는 고정 시퀀스입니다. 스피드 %가 그대로 제어기로 전달되는 값입니다.' }
+        };
+
+        // 0~100(%) -> 0.1~10.0초(ms), STEP 시간 슬라이더와 동일한 범위
+        function fxHoldToMs(v){ return 100 + (v/100)*9900; }
+        function fxSecLabel(v){ return (fxHoldToMs(v)/1000).toFixed(1) + '초'; }
+        // BLE 전송용: 0~100(%) -> 0.1초 단위 정수(1~100)
+        function fxHoldToDs(v){
+            let ds = Math.round(fxHoldToMs(v) / 100);
+            if (ds < 1) ds = 1; if (ds > 100) ds = 100;
+            return ds;
+        }
+        function fxDsToHoldPercent(ds){
+            const ms = ds * 100;
+            let v = Math.round(((ms - 100) / 9900) * 100);
+            if (v < 0) v = 0; if (v > 100) v = 100;
+            return v;
+        }
+        function fxSpeedLabel(v){
+            if (v < 20) return '아주 느림';
+            if (v < 40) return '느림';
+            if (v < 60) return '보통';
+            if (v < 80) return '빠름';
+            return '아주 빠름';
+        }
+
+        // ---- 싸이키 실측 파형 (오실로스코프 측정치) ----
+        const FX_STROBE_BASE_SEGMENTS = (() => {
+            const seg = [];
+            for (let i = 0; i < 4; i++) { seg.push([150, true]); seg.push([350, false]); }
+            for (let c = 0; c < 3; c++) {
+                for (let p = 0; p < 4; p++) { seg.push([75, true]); seg.push([75, false]); }
+                seg.push([500, false]);
+            }
+            return seg;
+        })();
+        const FX_STROBE_PCT_ANCHORS = [0, 25, 50, 75, 100];
+        const FX_STROBE_PCT_MULT     = [1.00, 0.75, 0.55, 0.35, 0.20];
+        function fxMultForPercent(pct){
+            pct = Math.min(100, Math.max(0, pct));
+            for (let i = 0; i < FX_STROBE_PCT_ANCHORS.length - 1; i++) {
+                const p0 = FX_STROBE_PCT_ANCHORS[i], p1 = FX_STROBE_PCT_ANCHORS[i+1];
+                if (pct >= p0 && pct <= p1) {
+                    const t = (pct - p0) / (p1 - p0);
+                    return FX_STROBE_PCT_MULT[i] + (FX_STROBE_PCT_MULT[i+1] - FX_STROBE_PCT_MULT[i]) * t;
+                }
+            }
+            return FX_STROBE_PCT_MULT[FX_STROBE_PCT_MULT.length - 1];
+        }
+        const fxStrobeSegCache = {};
+        function fxGetStrobeSegments(pct){
+            const key = Math.round(pct);
+            if (fxStrobeSegCache[key]) return fxStrobeSegCache[key];
+            const mult = fxMultForPercent(key);
+            const segs = FX_STROBE_BASE_SEGMENTS.map(([d, on]) => [d * mult, on]);
+            const total = segs.reduce((a, [d]) => a + d, 0);
+            const result = { segs, total };
+            fxStrobeSegCache[key] = result;
+            return result;
+        }
+        function fxStrobeStateAt(pct, elapsedMs){
+            const { segs, total } = fxGetStrobeSegments(pct);
+            let t = elapsedMs % total;
+            for (const [d, on] of segs) { if (t < d) return on; t -= d; }
+            return false;
+        }
+
+        // ---- 7바이트 BLE 패킷 <-> fxState 변환 (마지막 1바이트는 commit 플래그) ----
+        function buildFxEffectPacket(commit) {
+            let effectMode = 0, brightness = 100, onTimeDs = 10, offTimeDs = 10, breatheSpeedPct = 0, strobeSpeedPct = 0;
+            if (fxState.mode === 'dimmer') {
+                effectMode = 0; brightness = fxState.dimmer.brightness;
+            } else if (fxState.mode === 'breathe') {
+                effectMode = 1; breatheSpeedPct = fxState.breathe.speed;
+            } else if (fxState.mode === 'blink') {
+                effectMode = 2;
+                const ds = fxHoldToDs(fxState.blink.speed);
+                onTimeDs = ds; offTimeDs = ds;
+            } else if (fxState.mode === 'ontime') {
+                effectMode = 2;
+                onTimeDs = fxHoldToDs(fxState.ontime.onTime);
+                offTimeDs = fxHoldToDs(fxState.ontime.offTime);
+            } else if (fxState.mode === 'strobe') {
+                effectMode = 3; strobeSpeedPct = fxState.strobe.intensity;
+            }
+            return new Uint8Array([effectMode, brightness, onTimeDs, offTimeDs, breatheSpeedPct, strobeSpeedPct, commit ? 1 : 0]);
+        }
+        function applyFxEffectPacket(bytes) {
+            if (!bytes || bytes.length < 6) return;
+            const effectMode = bytes[0], brightness = bytes[1], onTimeDs = bytes[2],
+                  offTimeDs = bytes[3], breatheSpeedPct = bytes[4], strobeSpeedPct = bytes[5];
+            if (effectMode === 0) {
+                fxState.mode = 'dimmer'; fxState.dimmer.brightness = brightness;
+            } else if (effectMode === 1) {
+                fxState.mode = 'breathe'; fxState.breathe.speed = breatheSpeedPct;
+            } else if (effectMode === 2) {
+                if (onTimeDs === offTimeDs) {
+                    fxState.mode = 'blink'; fxState.blink.speed = fxDsToHoldPercent(onTimeDs);
+                } else {
+                    fxState.mode = 'ontime';
+                    fxState.ontime.onTime = fxDsToHoldPercent(onTimeDs);
+                    fxState.ontime.offTime = fxDsToHoldPercent(offTimeDs);
+                }
+            } else if (effectMode === 3) {
+                fxState.mode = 'strobe'; fxState.strobe.intensity = strobeSpeedPct;
+            }
+        }
+
+        // ---- 프리뷰 애니메이션 ----
+        let fxRafId = null;
+        let fxPhaseStart = performance.now();
+        let fxBlinkOn = true;
+        let fxBlinkPhaseStart = performance.now();
+
+        function fxSetBulb(glowOp, color){
+            const bulb = document.getElementById('fxBulb');
+            const ambient = document.getElementById('fxAmbient');
+            if (!bulb) return;
+            bulb.style.setProperty('--fx-glow-op', glowOp.toFixed(3));
+            ambient.style.setProperty('--fx-glow-op', (glowOp*0.9).toFixed(3));
+            if (color) {
+                bulb.style.setProperty('--fx-glow-color', color);
+                ambient.style.setProperty('--fx-glow-color', color);
+            }
+        }
+        function fxRestartAnim(){
+            fxPhaseStart = performance.now();
+            fxBlinkPhaseStart = performance.now();
+            fxBlinkOn = true;
+        }
+        function fxAnimate(now){
+            const m = fxState.mode;
+            if (m === 'dimmer') {
+                fxSetBulb(fxState.dimmer.brightness/100, FX_MODE_META.dimmer.color);
+            } else if (m === 'breathe') {
+                const periodMs = 10000 - (fxState.breathe.speed/100)*(10000-900);
+                const t = ((now - fxPhaseStart) % periodMs) / periodMs;
+                const wave = (Math.sin(t*Math.PI*2 - Math.PI/2)+1)/2;
+                fxSetBulb(0.06 + wave*0.94, FX_MODE_META.breathe.color);
+            } else if (m === 'blink') {
+                const dur = fxHoldToMs(fxState.blink.speed);
+                if (now - fxBlinkPhaseStart >= dur) { fxBlinkOn = !fxBlinkOn; fxBlinkPhaseStart = now; }
+                fxSetBulb(fxBlinkOn ? 1 : 0.04, FX_MODE_META.blink.color);
+            } else if (m === 'ontime') {
+                const onMs = fxHoldToMs(fxState.ontime.onTime);
+                const offMs = fxHoldToMs(fxState.ontime.offTime);
+                const dur = fxBlinkOn ? onMs : offMs;
+                if (now - fxBlinkPhaseStart >= dur) { fxBlinkOn = !fxBlinkOn; fxBlinkPhaseStart = now; }
+                fxSetBulb(fxBlinkOn ? 1 : 0.04, FX_MODE_META.ontime.color);
+            } else if (m === 'strobe') {
+                const pct = fxState.strobe.intensity;
+                const on = fxStrobeStateAt(pct, now - fxPhaseStart);
+                fxSetBulb(on ? 1 : 0.03, FX_MODE_META.strobe.color);
+            }
+            fxRafId = requestAnimationFrame(fxAnimate);
+        }
+
+        // ---- 드래그 페이더 컴포넌트 ----
+        function makeFxFader({ id, label, value, min=0, max=100, step=1, format, onChange }){
+            const zone = document.getElementById('fxFaderZone');
+            const wrap = document.createElement('div');
+            wrap.className = 'fx-fader-group';
+            wrap.innerHTML = `
+                <div class="fx-fader-label-row">
+                    <span class="fx-fader-label">${label}</span>
+                    <span class="fx-fader-value" id="${id}-val"></span>
+                </div>
+                <div class="fx-drag-row">
+                    <button type="button" class="fx-step-btn" id="${id}-dec" aria-label="감소"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                    <div class="fx-drag-track" id="${id}-track">
+                        <div class="fx-drag-fill" id="${id}-fill"></div>
+                        <div class="fx-drag-thumb" id="${id}-thumb"></div>
+                    </div>
+                    <button type="button" class="fx-step-btn" id="${id}-inc" aria-label="증가"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                </div>
+            `;
+            zone.appendChild(wrap);
+            const track = wrap.querySelector(`#${id}-track`);
+            const fill = wrap.querySelector(`#${id}-fill`);
+            const thumb = wrap.querySelector(`#${id}-thumb`);
+            const valEl = wrap.querySelector(`#${id}-val`);
+            const decBtn = wrap.querySelector(`#${id}-dec`);
+            const incBtn = wrap.querySelector(`#${id}-inc`);
+
+            let currentValue = value;
+
+            function render(v){
+                currentValue = v;
+                const pct = (v-min)/(max-min)*100;
+                fill.style.width = pct + '%';
+                const trackW = track.clientWidth - 8 - 28;
+                thumb.style.transform = `translateX(${4 + (pct/100)*trackW}px)`;
+                valEl.textContent = format ? format(v) : Math.round(v);
+            }
+            let dragging = false;
+            function valueFromClientX(clientX){
+                const rect = track.getBoundingClientRect();
+                const x = Math.min(Math.max(clientX - rect.left - 4, 0), rect.width - 8);
+                return min + (x / (rect.width - 8)) * (max-min);
+            }
+            function pointerDown(e){ dragging = true; pointerMove(e); }
+            function pointerMove(e){
+                if (!dragging) return;
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const v = Math.round(valueFromClientX(clientX));
+                render(v);
+                onChange(v);
+            }
+            function pointerUp(){ dragging = false; }
+            track.addEventListener('mousedown', pointerDown);
+            window.addEventListener('mousemove', pointerMove);
+            window.addEventListener('mouseup', pointerUp);
+            track.addEventListener('touchstart', pointerDown, {passive:true});
+            window.addEventListener('touchmove', pointerMove, {passive:true});
+            window.addEventListener('touchend', pointerUp);
+
+            // 좌우 버튼 - 드래그로 맞추기 힘든 미세 조정용(정밀 타이밍 설정에 유용)
+            function stepBy(delta){
+                const v = Math.min(max, Math.max(min, Math.round((currentValue + delta) * 100) / 100));
+                render(v);
+                onChange(v);
+            }
+            decBtn.addEventListener('click', () => stepBy(-step));
+            incBtn.addEventListener('click', () => stepBy(step));
+
+            requestAnimationFrame(()=> render(value));
+        }
+
+        function fxRenderReadout(){
+            const m = fxState.mode;
+            const valEl = document.getElementById('fxReadoutValue');
+            const subEl = document.getElementById('fxReadoutSub');
+            if (m === 'dimmer') {
+                valEl.textContent = fxState.dimmer.brightness + '%'; subEl.textContent = '밝기 고정';
+            } else if (m === 'breathe') {
+                valEl.textContent = fxSpeedLabel(fxState.breathe.speed); subEl.textContent = '브리딩 속도';
+            } else if (m === 'blink') {
+                valEl.textContent = fxSecLabel(fxState.blink.speed); subEl.textContent = 'ON = OFF 간격';
+            } else if (m === 'ontime') {
+                valEl.textContent = fxSecLabel(fxState.ontime.onTime) + ' / ' + fxSecLabel(fxState.ontime.offTime);
+                subEl.textContent = 'ON / OFF 유지시간';
+            } else if (m === 'strobe') {
+                const pct = fxState.strobe.intensity;
+                const cycleSec = (fxGetStrobeSegments(pct).total / 1000).toFixed(1);
+                valEl.textContent = pct + '%';
+                subEl.textContent = '1사이클 ' + cycleSec + '초 (큰펄스4+클러스터3)';
+            }
+            fxValidateSaveButtonState();
+            fxQueueLiveUpdate();
+        }
+
+        function fxBuildFadersForMode(){
+            const zone = document.getElementById('fxFaderZone');
+            zone.innerHTML = '';
+            const m = fxState.mode;
+            if (m === 'dimmer') {
+                makeFxFader({ id:'fx-bright', label:'밝기', value: fxState.dimmer.brightness, format:v=>v+'%',
+                    onChange:v=>{ fxState.dimmer.brightness = v; fxRenderReadout(); } });
+            } else if (m === 'breathe') {
+                makeFxFader({ id:'fx-speed', label:'속도', value: fxState.breathe.speed, format:fxSpeedLabel,
+                    onChange:v=>{ fxState.breathe.speed = v; fxRenderReadout(); } });
+            } else if (m === 'blink') {
+                makeFxFader({ id:'fx-blinkspeed', label:'스피드 (ON=OFF)', value: fxState.blink.speed, format:fxSecLabel,
+                    onChange:v=>{ fxState.blink.speed = v; fxRenderReadout(); } });
+            } else if (m === 'ontime') {
+                makeFxFader({ id:'fx-on', label:'ON 유지시간', value: fxState.ontime.onTime, format:fxSecLabel,
+                    onChange:v=>{ fxState.ontime.onTime = v; fxRenderReadout(); } });
+                makeFxFader({ id:'fx-off', label:'OFF 유지시간', value: fxState.ontime.offTime, format:fxSecLabel,
+                    onChange:v=>{ fxState.ontime.offTime = v; fxRenderReadout(); } });
+            } else if (m === 'strobe') {
+                makeFxFader({ id:'fx-intensity', label:'스피드', value: fxState.strobe.intensity, format:v=>v+'%',
+                    onChange:v=>{ fxState.strobe.intensity = v; fxRestartAnim(); fxRenderReadout(); } });
+            }
+        }
+
+        function switchFxMode(mode){
+            fxState.mode = mode;
+            document.querySelectorAll('#fxModeRail .fx-mode-sw').forEach(el=>{
+                el.classList.toggle('active', el.dataset.mode === mode);
+            });
+            document.getElementById('fxModeDesc').textContent = FX_MODE_META[mode].desc;
+            fxRestartAnim();
+            fxBuildFadersForMode();
+            fxRenderReadout();
+        }
+
+        let fxModeRailBound = false;
+        function fxBindModeRailOnce(){
+            if (fxModeRailBound) return;
+            fxModeRailBound = true;
+            document.querySelectorAll('#fxModeRail .fx-mode-sw').forEach(el=>{
+                el.addEventListener('click', ()=> switchFxMode(el.dataset.mode));
+            });
+        }
+
+        // 메인 화면(연출기 우선)에 상시 표시되는 LED 연출 콘솔을 초기화하고
+        // 프리뷰 애니메이션을 시작합니다. 페이지 로드 시 1회만 호출됩니다.
+        function initFxConsole(){
+            fxBindModeRailOnce();
+            document.querySelectorAll('#fxModeRail .fx-mode-sw').forEach(el=>{
+                el.classList.toggle('active', el.dataset.mode === fxState.mode);
+            });
+            document.getElementById('fxModeDesc').textContent = FX_MODE_META[fxState.mode].desc;
+            fxBuildFadersForMode();
+            fxRenderReadout();
+            fxRestartAnim();
+            if (fxRafId) cancelAnimationFrame(fxRafId);
+            fxRafId = requestAnimationFrame(fxAnimate);
+            fxUpdateSaveAvailability();
+        }
+
+        // 연결 상태가 바뀔 때(연결/해제) 저장 버튼 활성 여부와 안내 문구를 갱신.
+        // 연결된 경우 제어기에 저장된 현재 연출 값을 읽어와 화면에 반영하고,
+        // 그 값을 "기준(동기화됨)"으로 저장해둔다 - 이후 사용자가 값을 바꿔야만 저장 버튼이 켜진다.
+        let lastSyncedFxPacketKey = null;
+        // fxPacketKey는 항상 앞 6바이트(연출 파라미터)만 비교한다 - commit 플래그(7번째 바이트)는
+        // "저장할지 여부"에 대한 지시일 뿐 연출 값 자체가 아니므로 변경사항 비교에서 제외한다.
+        function fxPacketKey(bytes){ return Array.from(bytes).slice(0, 6).join(','); }
+
+        function fxValidateSaveButtonState(){
+            const saveBtn = document.getElementById('fxBtnSave');
+            if (!saveBtn) return;
+            const canSave = isConnected && !!bleEffectChar;
+            const noChanges = canSave && lastSyncedFxPacketKey !== null &&
+                fxPacketKey(buildFxEffectPacket(0)) === lastSyncedFxPacketKey;
+            saveBtn.disabled = !canSave || noChanges;
+            saveBtn.textContent = noChanges ? '변경사항 없음' : '이 연출로 저장';
+        }
+
+        // ---- 실시간 미리보기 전송 (드래그/모드전환 중 계속 호출됨, 스로틀 적용) ----
+        // commit=0으로 보내므로 제어기는 즉시 조명에만 반영하고 NVS에는 저장하지 않는다.
+        let fxSuppressLiveSend = false;   // 제어기 값을 "읽어오는" 동안에는 되받아 전송하지 않도록
+        let fxLiveSendTimer = null;
+        let fxLiveSendDirty = false;
+        let fxLiveWriteInFlight = false;  // BLE는 한 번에 하나의 GATT 작업만 가능 - 겹쳐 쓰기 방지
+        const FX_LIVE_SEND_INTERVAL_MS = 120;
+
+        function fxQueueLiveUpdate(){
+            if (fxSuppressLiveSend) return;
+            if (!isConnected || !bleEffectChar) return;
+            fxLiveSendDirty = true;
+            if (fxLiveSendTimer) return; // 이미 대기 중인 타이머가 있으면 그 타이머가 최신값을 전송함
+            fxLiveSendTimer = setTimeout(fxFlushLiveUpdate, FX_LIVE_SEND_INTERVAL_MS);
+        }
+
+        async function fxFlushLiveUpdate(){
+            fxLiveSendTimer = null;
+            if (!fxLiveSendDirty) return;
+            if (!isConnected || !bleEffectChar) { fxLiveSendDirty = false; return; }
+            if (fxLiveWriteInFlight) {
+                // 이전 전송이 아직 끝나지 않음 - 잠시 후 재시도 (그 사이 값이 또 바뀌었어도 최신값이 전송됨)
+                fxLiveSendTimer = setTimeout(fxFlushLiveUpdate, FX_LIVE_SEND_INTERVAL_MS);
+                return;
+            }
+            fxLiveSendDirty = false;
+            fxLiveWriteInFlight = true;
+            try {
+                const packet = buildFxEffectPacket(0); // commit=0: 실시간 미리보기 적용만
+                await bleEffectChar.writeValue(packet);
+            } catch (err) {
+                console.warn('LED 연출 실시간 전송 실패:', err);
+            } finally {
+                fxLiveWriteInFlight = false;
+            }
+        }
+
+        async function fxUpdateSaveAvailability(){
+            const connHint = document.getElementById('fxConnHint');
+            const saveBtn = document.getElementById('fxBtnSave');
+            if (!connHint || !saveBtn) return;
+
+            lastSyncedFxPacketKey = null;
+            if (isConnected && bleEffectChar) {
+                try {
+                    const value = await bleEffectChar.readValue();
+                    const bytes = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+                    fxSuppressLiveSend = true; // 읽어온 값을 화면에 반영하는 동안은 다시 전송하지 않음
+                    applyFxEffectPacket(bytes);
+                    lastSyncedFxPacketKey = fxPacketKey(bytes); // 방금 읽은 값을 "동기화됨" 기준으로 기록
+                    switchFxMode(fxState.mode); // 읽어온 값으로 화면/프리뷰 갱신 (내부에서 fxRenderReadout -> fxValidateSaveButtonState 호출됨)
+                    fxSuppressLiveSend = false;
+                } catch (err) {
+                    console.warn('LED 연출 값 읽기 실패(펌웨어 미구현일 수 있음):', err);
+                    fxSuppressLiveSend = false;
+                }
+            }
+            const canSave = isConnected && !!bleEffectChar;
+            connHint.style.display = canSave ? 'none' : 'block';
+            fxValidateSaveButtonState();
+        }
+
+        function openScheduleModal(){
+            document.getElementById('scheduleModalOverlay').style.display = 'flex';
+        }
+        function closeScheduleModal(){
+            document.getElementById('scheduleModalOverlay').style.display = 'none';
+        }
+
+        // "이 연출로 저장" - commit=1로 1회 전송해서 제어기가 NVS에 영구 저장하도록 요청한다.
+        // (드래그 중에는 이미 fxQueueLiveUpdate()가 commit=0으로 실시간 반영을 계속 보내고 있음)
+        async function saveLedEffect(){
+            if (!isConnected || !bleEffectChar) {
+                showToast('먼저 제어기에 연결해주세요. (LED 연출 특성이 펌웨어에 아직 없다면 준비 중입니다)', 'error');
+                return;
+            }
+            try {
+                if (fxLiveSendTimer) { clearTimeout(fxLiveSendTimer); fxLiveSendTimer = null; fxLiveSendDirty = false; }
+                const packet = buildFxEffectPacket(1);
+                await bleEffectChar.writeValue(packet);
+                lastSyncedFxPacketKey = fxPacketKey(packet); // 저장 성공 -> 이 값을 새 기준으로 갱신
+                fxValidateSaveButtonState();
+                showToast('LED 연출이 저장되었습니다.', 'success');
+            } catch (err) {
+                console.error('LED 연출 저장 실패:', err);
+                showToast('저장 실패: ' + err.message, 'error');
+            }
+        }
+    </script>
+
+</body>
+</html>
